@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Поиск через Яндекс</title>
+    <style>
+        /* Ваши существующие стили остаются без изменений */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+            padding: 20px;
+        }
+        
+        .search-container {
+            text-align: center;
+            width: 100%;
+            max-width: 600px;
+            position: relative;
+        }
+        
+        .logo {
+            margin-bottom: 30px;
+        }
+        
+        .logo img {
+            width: 150px;
+            height: auto;
+        }
+        
+        .search-box {
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-radius: 50px;
+            overflow: hidden;
+            transition: box-shadow 0.3s ease;
+            position: relative;
+        }
+        
+        .search-box:hover {
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+        }
+        
+        .input-container {
+            display: flex;
+            width: 100%;
+        }
+        
+        #search-input {
+            flex: 1;
+            padding: 16px 24px;
+            font-size: 18px;
+            border: none;
+            outline: none;
+        }
+        
+        #search-button {
+            background: #ff0000;
+            color: white;
+            border: none;
+            padding: 0 30px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background 0.3s ease;
+        }
+        
+        #search-button:hover {
+            background: #cc0000;
+        }
+        
+        .suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 0 0 20px 20px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 100;
+            margin-top: -10px;
+            padding-top: 10px;
+            display: none;
+        }
+        
+        .suggestion-item {
+            padding: 12px 24px;
+            text-align: left;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+        }
+        
+        .suggestion-item:hover {
+            background: #f5f5f5;
+        }
+        
+        .suggestion-icon {
+            margin-right: 12px;
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .hint {
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        @media (max-width: 480px) {
+            #search-input {
+                padding: 12px 20px;
+                font-size: 16px;
+            }
+            
+            #search-button {
+                padding: 0 20px;
+            }
+            
+            .logo img {
+                width: 120px;
+            }
+            
+            .suggestion-item {
+                padding: 10px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="search-container">
+        <div class="logo">
+            <a href="https://yandex.ru" target="_blank">
+                <img src="https://logo-teka.com/wp-content/uploads/2025/06/yandex-logo-rus.svg" alt="Яндекс">
+            </a>
+        </div>
+        
+        <form id="search-form" class="search-box">
+            <div class="input-container">
+                <input 
+                    type="text" 
+                    id="search-input" 
+                    placeholder="Введите поисковый запрос..." 
+                    autocomplete="off"
+                    required
+                >
+                <button type="submit" id="search-button">Найти</button>
+            </div>
+            <div id="suggestions" class="suggestions"></div>
+        </form>
+        
+        <p class="hint">Поиск осуществляется через Яндекс</p>
+    </div>
+
+    <script>
+        const searchInput = document.getElementById('search-input');
+        const suggestionsContainer = document.getElementById('suggestions');
+        let lastRequestTimer = null;
+        
+        // Альтернативный источник подсказок (можно заменить на свой бекенд)
+        const SUGGEST_API_URL = 'https://suggest.yandex.com/suggest-ya.cgi';
+        
+        // Функция для получения подсказок
+        function fetchSuggestions(query) {
+            if (!query || query.length < 2) {
+                suggestionsContainer.style.display = 'none';
+                return;
+            }
+            
+            // Вариант 1: Используем JSONP через callback
+            const callbackName = 'yandexSuggestCallback_' + Date.now();
+            window[callbackName] = function(data) {
+                delete window[callbackName];
+                if (data && data[1]) {
+                    showSuggestions(data[1]);
+                } else {
+                    suggestionsContainer.style.display = 'none';
+                }
+            };
+            
+            const script = document.createElement('script');
+            script.src = `${SUGGEST_API_URL}?part=${encodeURIComponent(query)}&v=4&callback=${callbackName}`;
+            script.onerror = () => {
+                delete window[callbackName];
+                // Если JSONP не сработал, пробуем альтернативный метод
+                tryAlternativeMethod(query);
+            };
+            document.body.appendChild(script);
+        }
+        
+        // Альтернативный метод, если JSONP не работает
+        function tryAlternativeMethod(query) {
+            // Вариант 2: Используем CORS-прокси (нужно заменить на свой)
+            const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+            const targetUrl = `${SUGGEST_API_URL}?part=${encodeURIComponent(query)}&v=4`;
+            
+            fetch(proxyUrl + targetUrl)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data[1]) {
+                        showSuggestions(data[1]);
+                    } else {
+                        suggestionsContainer.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка при получении подсказок:', error);
+                    suggestionsContainer.style.display = 'none';
+                    // Вариант 3: Локальные подсказки, если API недоступно
+                    showLocalSuggestions(query);
+                });
+        }
+        
+        // Локальные подсказки (запасной вариант)
+        function showLocalSuggestions(query) {
+            const localSuggestions = [
+                `${query} в Москве`,
+                `${query} 2023`,
+                `${query} купить`,
+                `${query} цена`,
+                `${query} отзывы`
+            ];
+            showSuggestions(localSuggestions);
+        }
+        
+        // Отображение подсказок
+        function showSuggestions(suggestions) {
+            suggestionsContainer.innerHTML = '';
+            
+            if (!suggestions || suggestions.length === 0) {
+                suggestionsContainer.style.display = 'none';
+                return;
+            }
+            
+            suggestions.forEach(suggestion => {
+                const item = document.createElement('div');
+                item.className = 'suggestion-item';
+                item.innerHTML = `
+                    <div class="suggestion-icon">→</div>
+                    <div>${suggestion}</div>
+                `;
+                
+                item.addEventListener('click', () => {
+                    searchInput.value = suggestion;
+                    suggestionsContainer.style.display = 'none';
+                    document.getElementById('search-form').dispatchEvent(new Event('submit'));
+                });
+                
+                suggestionsContainer.appendChild(item);
+            });
+            
+            suggestionsContainer.style.display = 'block';
+        }
+        
+        // Обработчик ввода с задержкой
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.trim();
+            
+            clearTimeout(lastRequestTimer);
+            lastRequestTimer = setTimeout(() => {
+                fetchSuggestions(query);
+            }, 300);
+        });
+        
+        // Скрытие подсказок при клике вне области
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-box')) {
+                suggestionsContainer.style.display = 'none';
+            }
+        });
+        
+        // Обработка отправки формы
+        document.getElementById('search-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            suggestionsContainer.style.display = 'none';
+            
+            const searchTerm = searchInput.value.trim();
+            if (searchTerm) {
+                const encodedTerm = encodeURIComponent(searchTerm);
+                window.location.href = `https://ya.ru/search/?clid=13413359&text=${encodedTerm}`;
+            }
+        });
+        
+        // Фокус на поле ввода при загрузке
+        window.addEventListener('DOMContentLoaded', () => {
+            searchInput.focus();
+        });
+    </script>
+</body>
+</html>
