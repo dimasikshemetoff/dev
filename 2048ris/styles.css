@@ -9,12 +9,12 @@ body {
     text-align: center;
     background: linear-gradient(135deg, #1a1a2e, #16213e);
     margin: 0;
-    padding: 20px;
     min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
     color: #f8f8f8;
+    transform: translateY(-20px);
 }
 
 .container {
@@ -148,6 +148,7 @@ h1 {
     min-width: 120px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     border: 1px solid #4a5975;
+    flex-grow: 1;
 }
 
 .score-box.pause-button {
@@ -247,9 +248,9 @@ h1 {
 
 .grid-container {
     position: relative;
-    height: 455px;
+    height: 400px;
     overflow: hidden;
-    margin-top: 20px;
+    margin-top: 5px;
 }
 
 .grid {
@@ -319,22 +320,22 @@ h1 {
     100% { transform: scale(1); opacity: 1; }
 }
 
-.tile-2 { background: #4a5975; }
-.tile-4 { background: #3d4e6d; }
-.tile-8 { background: #2d4059; color: #ffd166; }
-.tile-16 { background: #1d2d44; color: #ffd166; }
-.tile-32 { background: #0d1d2d; color: #ff9a76; }
-.tile-64 { background: #0a1520; color: #ff9a76; }
-.tile-128 { background: #06121d; color: #ff7b54; font-size: 30px; }
-.tile-256 { background: #030d17; color: #ff7b54; font-size: 30px; }
-.tile-512 { background: #01080e; color: #ff5d30; font-size: 30px; }
-.tile-1024 { background: #000408; color: #ff5d30; font-size: 25px; }
-.tile-2048 { background: #000000; color: #ff3c00; font-size: 25px; box-shadow: 0 0 15px #ff5d30; }
+.tile-2 { background: #a18054; }
+.tile-4 { background: #e69428; }
+.tile-8 { background: #c4652e; color: #ffffff; }
+.tile-16 { background: #8934aa; color: #ffffff; }
+.tile-32 { background: #e100ff; color: #ffffff; }
+.tile-64 { background: #50b898; color: #ffffff; }
+.tile-128 { background: #4417e7; color: #ffffff; font-size: 30px; }
+.tile-256 { background: #15c010; color: #ffffff; font-size: 30px; }
+.tile-512 { background: #fde400; color: #ffffff; font-size: 30px; }
+.tile-1024 { background: #0003a5; color: #95c6cc; font-size: 25px; }
+.tile-2048 { background: #d13b00; color: #adadad; font-size: 25px; box-shadow: 0 0 15px #ff5d30; }
 
 .falling {
     transition: transform 0.5s ease-in-out;
     z-index: 20;
-    animation: fallBounce 0.5s;
+    animation: fallBounce 1s;
 }
 
 @keyframes fallBounce {
@@ -373,6 +374,7 @@ h1 {
     background: linear-gradient(145deg, #ff9a76, #ff7b54);
     color: #1a1a2e;
     border: none;
+    margin-top: 10px;
     border-radius: 6px;
     padding: 12px 30px;
     font-size: 18px;
@@ -447,6 +449,17 @@ h1 {
 }
 
 @media (max-width: 500px) {
+
+    .score-box {
+        min-width: calc(50% - 10px);
+        padding: 10px 15px;
+    }
+    
+    .score-container {
+        gap: 10px;
+        padding: 10px;
+    }
+
     .container{
         padding: 5px;
     }
@@ -496,7 +509,7 @@ h1 {
     }
     body{
         padding: 5px;
-        transform: scale(0.9) translateY(-50px);
+        transform: translateY(-70px) scale(0.8);
     }
     .falling-area {
     position: absolute;
@@ -504,4 +517,81 @@ h1 {
     height: 30px;
     z-index: 1;
     }
+}
+
+
+.sound-button {
+    background: linear-gradient(145deg, #2d4059, #1d2d44);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.sound-button:hover {
+    transform: scale(1.05);
+}
+
+.sound-button.muted {
+    background: linear-gradient(145deg, #ff9a76, #ff7b54);
+}
+
+.second-chance-button{
+    margin-top: 20px;
+    font-size: 15px;
+}
+
+.game-over-score{
+    font-size: 18pt;
+}
+
+.leaderboard-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 10px;
+    padding: 10px;
+    width: 200px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    z-index: 100;
+    display: none;
+}
+
+.leaderboard-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    text-align: center;
+    color: #2d4059;
+}
+
+.leaderboard-entry {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 5px;
+    border-radius: 5px;
+    background-color: #f5f5f5;
+}
+
+.rank {
+    width: 25px;
+    text-align: center;
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.player-info {
+    flex-grow: 1;
+}
+
+.player-name {
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.player-score {
+    font-size: 12px;
+    color: #666;
 }

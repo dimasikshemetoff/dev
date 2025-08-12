@@ -3,21 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tile mutation</title>
+    <title>Мутация плиток</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Yandex Games SDK -->
+    <script src="/sdk.js"></script>
 </head>
 <body>
     <div class="container">
         <div class="start-screen" id="start-screen">
-            <h1>Tile Mutation</h1>
+            <h1>Мутация плиток</h1>
             <div class="rules">
                 <h3>Правила игры:</h3>
                 <ul>
-                    <li>Используйте стрелки на клавиатуре для перемещения плиток</li>
+                    <li>Используйте стрелки на клавиатуре (свайп на мобильном устройстве) для перемещения плиток</li>
                     <li>Плитки с одинаковыми числами сливаются при столкновении</li>
                     <li>Сверху появляются новые плитки (как в тетрисе)</li>
                     <li>Цель - получить плитку 2048</li>
-                    <li>В окне предпросмотра показаны следующие плитки и их позиции</li>
+                    <li>Падающие плитки автоматически сливаются с одинаковыми им плитками</li>
                 </ul>
             </div>
             <button class="start-button" id="start-button">Начать игру</button>
@@ -34,9 +36,17 @@
                         <span class="score-title">Пауза</span>
                         <span>II</span>
                     </div>
+                    <div class="score-box sound-button" id="sound-button">
+                        <span class="score-title">Звук</span>
+                        <span id="sound-icon">🔊</span>
+                    </div>
                     <div class="score-box">
                         <span class="score-title">Рекорд</span>
                         <span id="best-score">0</span>
+                    </div>
+                    <div class="score-box" id="leaderboard-box">
+                        <span class="score-title">Место</span>
+                        <span id="player-rank">-</span>
                     </div>
                 </div>
             </div>
@@ -67,21 +77,18 @@
             
             <div class="game-over" id="game-over">
                 <div class="game-over-text">Игра окончена!</div>
+                <div class="game-over-score">Ваш счет: <span id="final-score">0</span></div>
                 <button class="restart-button" id="restart-button">Играть снова</button>
+                <button class="second-chance-button restart-button" id="second-chance-button">Второй шанс</button>
             </div>
         </div>
         
-        <div class="instructions" id="instructions" style="display: none;">
-            <h3>Как играть:</h3>
-            <ul>
-                <li>Используйте стрелки на клавиатуре для перемещения плиток</li>
-                <li>Плитки с одинаковыми числами сливаются при столкновении</li>
-                <li>Сверху появляются новые плитки (как в тетрисе)</li>
-                <li>Цель - получить плитку 2048</li>
-                <li>В окне предпросмотра показаны следующие плитки и их позиции</li>
-            </ul>
-        </div>
+        <audio id="lose-sound" src="lose.mp3" preload="auto"></audio>
+        <audio id="merge-sound" src="merge.mp3" preload="auto"></audio>
+        <audio id="newrecord-sound" src="newrecord.mp3" preload="auto"></audio>
+        <audio id="pauseresume-sound" src="pauseresume.mp3" preload="auto"></audio>
     </div>
+    
     
     <script src="script.js"></script>
 </body>
