@@ -24,19 +24,18 @@ YaGames.init().then(_ysdk => {
     player = _player;
     console.log('Player initialized');
     
-    // Проверка авторизации
     if (!player.isAuthorized()) {
-        // Можно предложить авторизацию
-        console.log('Player is not authorized');
+        console.log('Player is not authorized - leaderboard features will be limited');
+        // Можно предложить игроку авторизоваться
     }
     
     // Загружаем лучший счет из данных игрока
-    return player.getData(['bestScore']);
+    return player.getData(['BestScore']);
 }).then(data => {
     if (data && data.bestScore) {
         const bestScoreDisplay = document.getElementById('best-score');
         bestScoreDisplay.textContent = data.bestScore;
-        localStorage.setItem('bestScore', data.bestScore);
+        localStorage.setItem('BestScore', data.bestScore);
     }
 }).catch(err => {
     console.error('Yandex SDK initialization error:', err);
@@ -65,15 +64,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const leaderboardBox = document.getElementById('leaderboard-box');
     const leaderboardModal = document.getElementById('leaderboard-modal');
     const closeModal = document.getElementById('close-modal');
-    const topPlayersList = document.getElementById('top-players');
-    const playerPositionList = document.getElementById('player-position');
-
+    const leaderboardList = document.getElementById('leaderboard-list');
     
     let board = [];
     let nextTiles = [];
     let score = 0;
     let lastscore = 0;
-    let bestScore = localStorage.getItem('bestScore') || 0;
+    let bestScore = localStorage.getItem('BestScore') || 0;
     let isGameOver = false;
     let isMoving = false;
     let dropInterval;
@@ -90,31 +87,51 @@ document.addEventListener('DOMContentLoaded', () => {
     let leaderboardName = 'tilesleaderboard';
     let playerRank = '-';
     let hasNewRecordSoundPlayed = false;
+    let pausedTimeRemaining = 0;
+    let totalDropTime = 5000;
     
     // Sound elements
     let loseSound;
     let mergeSound;
     let newRecordSound;
     let pauseResumeSound;
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+
+    function handleVisibilityChange() {
+        if (document.hidden) {
+            pauseAllSounds();
+        } else if (!isPaused && isSoundEnabled) {
+            resumeAllSounds();
+        }
+    }
+
+    function handleWindowBlur() {
+        if (!document.hidden) return;
+        pauseAllSounds();
+    }
+
+    function pauseAllSounds() {
+        if (loseSound) loseSound.pause();
+        if (mergeSound) mergeSound.pause();
+        if (newRecordSound) newRecordSound.pause();
+        if (pauseResumeSound) pauseResumeSound.pause();
+    }
     
     soundButton.addEventListener('click', toggleSound);
     bestScoreDisplay.textContent = bestScore;
     
-    // Start button event listener
     startButton.addEventListener('click', () => {
         startScreen.style.display = 'none';
         gameContainer.style.display = 'block';
         initGame();
-        // Уведомляем SDK о начале геймплея
         if (ysdk && ysdk.features && ysdk.features.GameplayAPI) {
             ysdk.features.GameplayAPI.start();
         }
     });
     
-    // Pause button event listener
     pauseButton.addEventListener('click', togglePause);
-    
-    // Second chance button event listener
     secondChanceButton.addEventListener('click', showRewardedAd);
 
     function toggleSound() {
@@ -123,15 +140,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isSoundEnabled) {
             soundButton.classList.remove('muted');
             soundIcon.textContent = '🔊';
-            // Включаем звуки
-            loseSound.volume = 0.2;
-            mergeSound.volume = 0.1;
-            newRecordSound.volume = 0.5;
-            pauseResumeSound.volume = 0.1;
+            if (!document.hidden) {
+                loseSound.volume = 0.2;
+                mergeSound.volume = 0.1;
+                newRecordSound.volume = 0.5;
+                pauseResumeSound.volume = 0.1;
+            }
         } else {
             soundButton.classList.add('muted');
             soundIcon.textContent = '🔇';
-            // Отключаем все звуки
             loseSound.volume = 0;
             mergeSound.volume = 0;
             newRecordSound.volume = 0;
@@ -139,82 +156,71 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Обработчик клика на блок с местом
     leaderboardBox.addEventListener('click', () => {
         if (isGameOver) return;
         
-        // Ставим игру на паузу, если она не на паузе
         const wasPaused = isPaused;
         if (!isPaused) {
             togglePause();
         }
         
-        // Показываем модальное окно
         leaderboardModal.style.display = 'flex';
-        
-        // Загружаем данные лидерборда
-        loadLeaderboardData().finally(() => {
-            // После загрузки данных, если игра не была на паузе, 
-            // мы не снимаем паузу - она останется на паузе до закрытия модального окна
-        });
+        loadLeaderboardData();
     });
 
-    // Обработчик закрытия модального окна
     closeModal.addEventListener('click', () => {
         leaderboardModal.style.display = 'none';
-        // Не снимаем паузу автоматически - пользователь сделает это сам
     });
 
-    
-
-    // Функция для форматирования имени игрока
     function formatPlayerName(player) {
-        if (player.publicName) {
-            return player.publicName;
-        }
-        return `Игрок ${player.uniqueID.substring(0, 4)}`;
+        if (!player) return 'Аноним';
+        if (player.publicName) return player.publicName;
+        return `Игрок ${player.uniqueID ? player.uniqueID.substring(0, 4) : '0000'}`;
     }
 
-    // Функция для загрузки данных лидерборда
     function loadLeaderboardData() {
         if (!ysdk || !ysdk.leaderboards) {
             return Promise.resolve();
         }
         
         return Promise.all([
-            // Получаем топ-3 игроков
             ysdk.leaderboards.getEntries(leaderboardName, {
-                quantityTop: 3,
+                quantityTop: 5,
                 includeUser: false
             }),
-            // Получаем позицию текущего игрока
-            ysdk.leaderboards.getPlayerEntry(leaderboardName)
+            ysdk.leaderboards.getPlayerEntry(leaderboardName).catch(err => {
+                if (err.code === 'LEADERBOARD_PLAYER_NOT_PRESENT') {
+                    return null;
+                }
+                throw err;
+            })
         ]).then(([topEntries, playerEntry]) => {
-            const listContainer = document.getElementById('leaderboard-list');
-            listContainer.innerHTML = '';
+            leaderboardList.innerHTML = '';
             
-            // Добавляем топ-3 игроков
             if (topEntries && topEntries.entries && topEntries.entries.length > 0) {
                 topEntries.entries.forEach(entry => {
-                    addLeaderboardEntry(listContainer, entry, false);
+                    addLeaderboardEntry(leaderboardList, entry, false);
                 });
             } else {
-                listContainer.innerHTML = '<div class="no-data">Нет данных</div>';
+                leaderboardList.innerHTML = '<div class="no-data">Нет данных</div>';
             }
             
-            // Добавляем разделитель и позицию игрока
             if (playerEntry) {
                 const separator = document.createElement('div');
-                separator.className = 'player-position-title';
+                separator.className = 'leaderboard-separator';
                 separator.textContent = 'Ваше место';
-                listContainer.appendChild(separator);
+                leaderboardList.appendChild(separator);
                 
-                addLeaderboardEntry(listContainer, playerEntry, true);
+                addLeaderboardEntry(leaderboardList, playerEntry, true);
+            } else if (player && player.isAuthorized()) {
+                const separator = document.createElement('div');
+                separator.className = 'leaderboard-separator';
+                separator.textContent = 'Вы ещё не в таблице';
+                leaderboardList.appendChild(separator);
             }
         }).catch(err => {
             console.log('Error loading leaderboard data:', err);
-            const listContainer = document.getElementById('leaderboard-list');
-            listContainer.innerHTML = '<div class="no-data">Ошибка загрузки</div>';
+            leaderboardList.innerHTML = '<div class="no-data">Ошибка загрузки</div>';
         });
     }
 
@@ -225,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
         entryElement.innerHTML = `
             <span class="leaderboard-rank">${entry.rank}.</span>
             <span class="leaderboard-name">${formatPlayerName(entry.player)}</span>
-            <span class="leaderboard-score">${entry.score}</span>
+            <span class="leaderboard-score">${entry.formattedScore || entry.score}</span>
         `;
         
         container.appendChild(entryElement);
@@ -237,33 +243,33 @@ document.addEventListener('DOMContentLoaded', () => {
         isPaused = !isPaused;
         
         if (isPaused) {
+            pausedTimeRemaining = timeUntilNextDrop;
             clearInterval(dropInterval);
             clearInterval(dropTimerInterval);
             pauseButton.style.background = 'linear-gradient(145deg, #ff9a76, #ff7b54)';
             pauseButton.querySelector('span').textContent = 'ДАЛЕЕ';
             
-            // Уведомляем SDK о паузе в игре
             if (ysdk && ysdk.features && ysdk.features.GameplayAPI) {
                 ysdk.features.GameplayAPI.stop();
             }
             
-            // Play pause/resume sound
             if (isSoundEnabled) {
                 pauseResumeSound.currentTime = 0;
                 pauseResumeSound.play();
             }
         } else {
+            timeUntilNextDrop = pausedTimeRemaining;
+            lastDropTime = Date.now() - (totalDropTime - pausedTimeRemaining);
+            
             startDropTimer();
             scheduleNextDrop();
             pauseButton.style.background = 'linear-gradient(145deg, #2d4059, #1d2d44)';
             pauseButton.querySelector('span').textContent = 'ПАУЗА';
             
-            // Уведомляем SDK о возобновлении игры
             if (ysdk && ysdk.features && ysdk.features.GameplayAPI) {
                 ysdk.features.GameplayAPI.start();
             }
             
-            // Play pause/resume sound
             if (isSoundEnabled) {
                 pauseResumeSound.currentTime = 0;
                 pauseResumeSound.play();
@@ -273,7 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function showRewardedAd() {
         if (!ysdk || !ysdk.adv) {
-            // Если SDK не загружен, просто даем второй шанс
             useSecondChance();
             return;
         }
@@ -282,7 +287,6 @@ document.addEventListener('DOMContentLoaded', () => {
             callbacks: {
                 onOpen: () => {
                     console.log('Rewarded ad opened');
-                    // Уведомляем SDK о паузе в игре
                     if (ysdk.features && ysdk.features.GameplayAPI) {
                         ysdk.features.GameplayAPI.stop();
                     }
@@ -293,14 +297,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 onClose: () => {
                     console.log('Rewarded ad closed');
-                    // Уведомляем SDK о возобновлении игры
                     if (ysdk.features && ysdk.features.GameplayAPI) {
                         ysdk.features.GameplayAPI.start();
                     }
                 },
                 onError: (e) => {
                     console.log('Rewarded ad error:', e);
-                    // В случае ошибки все равно даем второй шанс
                     useSecondChance();
                 }
             }
@@ -310,11 +312,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function useSecondChance() {
         if (!hasSecondChance) return;
         
-        hasSecondChance = false; // Устанавливаем флаг, что второй шанс использован
+        hasSecondChance = false;
         isGameOver = false;
         gameOverDisplay.style.display = 'none';
         
-        // Очищаем верхний ряд
         for (let col = 0; col < gridSize; col++) {
             if (board[0][col] !== null) {
                 const tile = document.getElementById(`tile-0-${col}`);
@@ -323,18 +324,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Сбрасываем таймеры
         clearInterval(dropInterval);
         clearInterval(dropTimerInterval);
-        
-        // Обновляем отображение
         updateBoardView();
-        
-        // Перезапускаем таймеры
         startDropTimer();
         scheduleNextDrop();
         
-        // Уведомляем SDK о возобновлении игры
         if (ysdk && ysdk.features && ysdk.features.GameplayAPI) {
             ysdk.features.GameplayAPI.start();
         }
@@ -342,7 +337,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function showFullscreenAd() {
         if (!ysdk || !ysdk.adv) {
-            // Если SDK не загружен, просто перезапускаем игру
             initGame();
             return;
         }
@@ -350,53 +344,41 @@ document.addEventListener('DOMContentLoaded', () => {
         ysdk.adv.showFullscreenAdv({
             callbacks: {
                 onOpen: () => {
-                    
                     if (ysdk.features && ysdk.features.GameplayAPI) {
                         ysdk.features.GameplayAPI.stop();
                     }
                 },
                 onClose: (wasShown) => {
-                    
-                    // Всегда возобновляем игру, независимо от того, была ли показана реклама
                     if (ysdk.features && ysdk.features.GameplayAPI) {
                         ysdk.features.GameplayAPI.start();
                     }
-                    
-                    // Перезапускаем игру в любом случае
                     initGame();
                 },
                 onError: (e) => {
-                    
-                    // В случае ошибки все равно перезапускаем игру
                     initGame();
                 }
             }
         });
     }
     
-    // Initialize the game
     function initGame() {
-        // Clear the grid and preview
         grid.innerHTML = '';
         previewRow.innerHTML = '';
         fallingArea.innerHTML = '';
         
-        // Initialize sounds
         loseSound = document.getElementById('lose-sound');
         mergeSound = document.getElementById('merge-sound');
         newRecordSound = document.getElementById('newrecord-sound');
         pauseResumeSound = document.getElementById('pauseresume-sound');
         hasNewRecordSoundPlayed = false;
         
-        // Set volume (optional)
         loseSound.volume = 0.2;
         mergeSound.volume = 0.1;
         newRecordSound.volume = 0.5;
         pauseResumeSound.volume = 0.1;
         
-        // Инициализация лидерборда
         initLeaderboard();
-        // Create preview cells
+        
         for (let i = 0; i < gridSize; i++) {
             const previewCell = document.createElement('div');
             previewCell.className = 'preview-cell';
@@ -404,7 +386,6 @@ document.addEventListener('DOMContentLoaded', () => {
             previewRow.appendChild(previewCell);
         }
         
-        // Create grid cells
         for (let row = 0; row < gridSize; row++) {
             board[row] = [];
             const gridRow = document.createElement('div');
@@ -428,23 +409,20 @@ document.addEventListener('DOMContentLoaded', () => {
         isMoving = false;
         dropTimer = 3;
         lastDropTime = Date.now();
-        hasSecondChance = true; // Сбрасываем флаг второго шанса при новой игре
+        hasSecondChance = true;
         nextTiles = [];
         isPaused = false;
         fallingTilesCount = 0;
         animationInProgress = false;
         swipeAnimationInProgress = false;
+        pausedTimeRemaining = 0;
         
-        // Generate first next tiles (2 tiles)
         generateNextTile();
         generateNextTile();
         updatePreview();
-        
-        // Add initial tiles (2 tiles)
         addRandomTile();
         addRandomTile();
         
-        // Start the falling tiles interval
         if (dropInterval) clearInterval(dropInterval);
         if (dropTimerInterval) clearInterval(dropTimerInterval);
         
@@ -452,7 +430,6 @@ document.addEventListener('DOMContentLoaded', () => {
         scheduleNextDrop();
     }
     
-    // Generate next falling tile with updated probabilities
     function generateNextTile() {
         let column;
         let attempts = 0;
@@ -472,9 +449,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (score >= 700) {
             if (random < 0.1) {
                 value = 8;
-            } else if (random < 0.6) { // 0.1-0.6 = 50%
+            } else if (random < 0.6) {
                 value = 4;
-            } else { // 0.6-1.0 = 40%
+            } else {
                 value = 2;
             }
         } else {
@@ -483,13 +460,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         nextTiles.push({ column, value });
         
-        // Keep only 2 next tiles in queue
         if (nextTiles.length > 2) {
             nextTiles.shift();
         }
     }
     
-    // Update the preview display
     function updatePreview() {
         for (let i = 0; i < gridSize; i++) {
             const cell = document.getElementById(`preview-cell-${i}`);
@@ -509,7 +484,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Добавьте эту функцию для инициализации лидерборда
     function initLeaderboard() {
         if (!ysdk || !ysdk.leaderboards) {
             console.log('Leaderboards not available');
@@ -517,30 +491,61 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Проверяем доступность метода
+        // Проверяем доступность лидербордов для данного пользователя
         ysdk.isAvailableMethod('leaderboards.getPlayerEntry').then(available => {
             if (available) {
+                document.getElementById('leaderboard-box').style.display = 'flex';
                 updateLeaderboard();
             } else {
                 console.log('Leaderboards methods not available for this user');
                 document.getElementById('leaderboard-box').style.display = 'none';
             }
+        }).catch(err => {
+            console.log('Error checking leaderboard availability:', err);
+            document.getElementById('leaderboard-box').style.display = 'none';
         });
     }
 
-    // Функция для обновления данных лидерборда
     function updateLeaderboard() {
-        if (!ysdk || !ysdk.leaderboards) return;
+        if (!ysdk || !ysdk.leaderboards) return Promise.resolve();
         
-        // Получаем запись текущего игрока
-        ysdk.leaderboards.getPlayerEntry(leaderboardName)
-            .then(entry => {
-                displayPlayerRank(entry);
+        return Promise.all([
+            ysdk.leaderboards.getEntries(leaderboardName, {
+                quantityTop: 5,
+                includeUser: false
+            }),
+            ysdk.leaderboards.getPlayerEntry(leaderboardName).catch(err => {
+                if (err.code === 'LEADERBOARD_PLAYER_NOT_PRESENT') {
+                    return null;
+                }
+                throw err;
             })
-            .catch(err => {
-                console.log('Leaderboard error:', err);
-                document.getElementById('leaderboard-box').style.display = 'none';
+        ]).then(([topEntries, playerEntry]) => {
+            // Обновляем UI лидерборда
+            displayLeaderboardData(topEntries);
+            displayPlayerRank(playerEntry);
+        }).catch(err => {
+            console.error('Error loading leaderboard data:', err);
+        });
+    }
+
+    function displayLeaderboardData(topEntries) {
+        leaderboardList.innerHTML = '';
+        
+        if (topEntries && topEntries.entries && topEntries.entries.length > 0) {
+            topEntries.entries.forEach(entry => {
+                const playerElement = document.createElement('div');
+                playerElement.className = 'leaderboard-entry';
+                playerElement.innerHTML = `
+                    <span class="leaderboard-rank">${entry.rank}.</span>
+                    <span class="leaderboard-name">${formatPlayerName(entry.player)}</span>
+                    <span class="leaderboard-score">${entry.formattedScore || entry.score}</span>
+                `;
+                leaderboardList.appendChild(playerElement);
             });
+        } else {
+            leaderboardList.innerHTML = '<div class="no-data">Нет данных</div>';
+        }
     }
 
     function displayPlayerRank(entry) {
@@ -550,7 +555,6 @@ document.addEventListener('DOMContentLoaded', () => {
             playerRank = entry.rank;
             rankElement.textContent = entry.rank;
             
-            // Обновляем запись игрока в лидерборде, если его текущий счет выше
             if (score > 0 && score > entry.score) {
                 updatePlayerScore();
             }
@@ -558,23 +562,23 @@ document.addEventListener('DOMContentLoaded', () => {
             rankElement.textContent = '-';
         }
     }
-    
-    
-    // Schedule next tile drop
+        
     function scheduleNextDrop() {
         const now = Date.now();
         const timeSinceLastDrop = now - lastDropTime;
         let delay;
         
         if (score >= 1000) {
-            delay = Math.max(0, 3000 - timeSinceLastDrop);
+            totalDropTime = 3000;
+            delay = Math.max(0, totalDropTime - timeSinceLastDrop);
         } else if (score >= 300) {
-            delay = Math.max(0, 4000 - timeSinceLastDrop);
+            totalDropTime = 4000;
+            delay = Math.max(0, totalDropTime - timeSinceLastDrop);
         } else {
-            delay = Math.max(0, 5000 - timeSinceLastDrop);
+            totalDropTime = 5000;
+            delay = Math.max(0, totalDropTime - timeSinceLastDrop);
         }
         
-        // Обновляем время до следующего падения
         timeUntilNextDrop = delay;
         
         if (dropInterval) clearInterval(dropInterval);
@@ -588,7 +592,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, delay);
     }
 
-    // Add falling tile from queue
     function addFallingTileFromQueue() {
         if (isGameOver || nextTiles.length === 0 || isPaused) return;
         
@@ -605,9 +608,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Start drop timer countdown
     function startDropTimer() {
-        dropTimer = 3;
+        dropTimer = totalDropTime / 1000;
         updateTimerDisplay();
         
         if (dropTimerInterval) clearInterval(dropTimerInterval);
@@ -617,38 +619,18 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const now = Date.now();
             const timeSinceLastDrop = now - lastDropTime;
-            let totalTime;
             
-            if (score >= 1000) {
-                totalTime = 3000;
-            } else if (score >= 300) {
-                totalTime = 4000;
-            } else {
-                totalTime = 5000;
-            }
-            
-            dropTimer = Math.max(0, (totalTime - timeSinceLastDrop) / 1000);
+            dropTimer = Math.max(0, (totalDropTime - timeSinceLastDrop) / 1000);
+            timeUntilNextDrop = totalDropTime - timeSinceLastDrop;
             updateTimerDisplay();
         }, 50);
     }
     
-    // Update timer display
     function updateTimerDisplay() {
         timerText.textContent = dropTimer.toFixed(1);
-        let totalTime;
-        
-        if (score >= 1000) {
-            totalTime = 3;
-        } else if (score >= 300) {
-            totalTime = 4;
-        } else {
-            totalTime = 5;
-        }
-        
-        timerProgress.style.width = `${(dropTimer / totalTime) * 100}%`;
+        timerProgress.style.width = `${(dropTimer / (totalDropTime / 1000)) * 100}%`;
     }
     
-    // Add a random tile (2 or 4) to a random empty cell
     function addRandomTile() {
         const emptyCells = [];
         
@@ -671,27 +653,76 @@ document.addEventListener('DOMContentLoaded', () => {
         return false;
     }
 
-    // Функция для обновления счета игрока в лидерборде
     function updatePlayerScore() {
-        if (!ysdk || !ysdk.leaderboards || score <= 0) return;
-        
+        // Проверяем доступность SDK и лидербордов
+        if (!ysdk || !ysdk.leaderboards || score <= 0) {
+            console.log('Leaderboards not available or invalid score');
+            return;
+        }
+
+        // Проверяем, что это действительно новый рекорд
+        if (score >= bestScore) {
+            console.log('Score is new record');
+
+        }
+
+        // Проверяем авторизацию игрока
+        if (!player || !player.isAuthorized()) {
+            console.log('Player not authorized, cannot update leaderboard');
+            return;
+        }
+
         // Проверяем доступность метода
-        ysdk.isAvailableMethod('leaderboards.setScore').then(available => {
-            if (available) {
+        ysdk.isAvailableMethod('leaderboards.setScore')
+            .then(available => {
+                if (!available) {
+                    console.log('Leaderboards.setScore method not available');
+                    return;
+                }
+
+                // Защита от слишком частых запросов
+                const now = Date.now();
+                if (window.lastLeaderboardUpdate && 
+                    (now - window.lastLeaderboardUpdate) < 1000) {
+                    console.log('Leaderboard update too frequent, delaying');
+                    setTimeout(updatePlayerScore, 1000);
+                    return;
+                }
+
+                // Пытаемся обновить результат
                 ysdk.leaderboards.setScore(leaderboardName, score)
                     .then(() => {
-                        console.log('Score updated in leaderboard');
-                        // После обновления счета обновляем отображение
-                        updateLeaderboard();
+                        console.log('Score successfully updated in leaderboard:', score);
+                        window.lastLeaderboardUpdate = Date.now();
+                        
+                        // Обновляем локальное представление лидерборда
+                        return updateLeaderboard();
                     })
                     .catch(err => {
-                        console.log('Error updating leaderboard score:', err);
+                        console.error('Error updating leaderboard score:', err);
+                        
+                        // Обработка специфических ошибок
+                        if (err.code === 'LEADERBOARD_TOO_MANY_REQUESTS') {
+                            console.log('Too many requests, retrying in 1 second');
+                            setTimeout(updatePlayerScore, 1000);
+                        } 
+                        else if (err.code === 'LEADERBOARD_PLAYER_NOT_PRESENT') {
+                            console.log('Player not present in leaderboard');
+                        }
+                        else if (err.code === 'NETWORK_ERROR') {
+                            console.log('Network error, retrying in 2 seconds');
+                            setTimeout(updatePlayerScore, 2000);
+                        }
+                        else {
+                            console.error('Permanent error, cannot update leaderboard');
+                        }
                     });
-            }
-        });
+            })
+            .catch(err => {
+                console.error('Error checking method availability:', err);
+            });
     }
     
-    // Add a single falling tile to a column
     function addFallingTile(col, value) {
         fallingTilesCount++;
         animationInProgress = true;
@@ -699,13 +730,29 @@ document.addEventListener('DOMContentLoaded', () => {
         fallingTile.className = `falling-tile tile-${value}`;
         fallingTile.textContent = value;
         
+        const bodyStyle = window.getComputedStyle(document.body);
+        const transformValue = bodyStyle.getPropertyValue('transform');
+        let scale = 1;
+        
+        if (transformValue !== 'none') {
+            const matrix = transformValue.match(/^matrix\((.+)\)$/);
+            if (matrix) {
+                const values = matrix[1].split(', ');
+                scale = parseFloat(values[0]);
+            }
+        }
+        
         const cell = document.getElementById('cell-0-0');
         const cellRect = cell.getBoundingClientRect();
         const gridRect = gridContainer.getBoundingClientRect();
         
-        const leftPos = cellRect.left - gridRect.left + col * (cellRect.width + 15);
+        const leftPos = (cellRect.left - gridRect.left) / scale + col * (cellRect.width / scale + 15 / scale);
         fallingTile.style.left = `${leftPos}px`;
         fallingTile.style.top = '0';
+        
+        fallingTile.style.width = `${80 / scale}px`;
+        fallingTile.style.height = `${80 / scale}px`;
+        fallingTile.style.fontSize = `${35 / scale}px`;
         
         fallingArea.appendChild(fallingTile);
         
@@ -716,7 +763,9 @@ document.addEventListener('DOMContentLoaded', () => {
             landingRow++;
         }
         
-        const finalTop = cellRect.top - gridRect.top + (landingRow > 0 ? landingRow - 1 : 0) * (cellRect.height + 15) - 15;
+        const finalTop = (cellRect.top - gridRect.top) / scale + 
+                        (landingRow > 0 ? landingRow - 1 : 0) * (cellRect.height / scale + 15 / scale) - 
+                        15 / scale;
         
         fallingTile.style.transition = 'transform 0.5s ease-in-out';
         fallingTile.style.transform = `translateY(${finalTop}px)`;
@@ -755,7 +804,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 500);
     }
     
-    // Check if top row is full
     function checkTopRowFull() {
         for (let col = 0; col < gridSize; col++) {
             if (board[0][col] === null) {
@@ -766,14 +814,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return true;
     }
     
-    // Add a tile to the board
     function addTile(row, col, value) {
         board[row][col] = value;
         const tile = createTile(row, col, value);
         document.getElementById(`cell-${row}-${col}`).appendChild(tile);
     }
     
-    // Create a tile element
     function createTile(row, col, value) {
         const tile = document.createElement('div');
         tile.className = `tile tile-${value} tile-new`;
@@ -782,14 +828,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return tile;
     }
     
-    // Merge tiles
     function mergeTiles(row, col, value) {
         const newValue = value * 2;
         board[row][col] = newValue;
         
         score += newValue;
         if(score !== lastscore){
-            // Play merge sound
             if (isSoundEnabled && score !== lastscore) {
                 mergeSound.currentTime = 0;
                 mergeSound.play();
@@ -801,14 +845,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (score > bestScore) {
             bestScore = score;
             bestScoreDisplay.textContent = bestScore;
-            localStorage.setItem('bestScore', bestScore);
+            localStorage.setItem('BestScore', bestScore);
             
-            // Сохраняем лучший счет в данных игрока
             if (player) {
                 player.setData({ bestScore });
             }
             
-            // Play new record sound if this is a new high score and sound hasn't played yet
+            
             if (!hasNewRecordSoundPlayed) {
                 if (isSoundEnabled) {
                     newRecordSound.currentTime = 0;
@@ -832,11 +875,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Move tiles in a direction
     function move(direction) {
-        // Проверяем, что до падения осталось больше 500 мс
         if (timeUntilNextDrop <= 500) {
-            return; // Прерываем свайп, если до падения меньше 500 мс
+            return;
         }
         
         if (isGameOver || isMoving || isPaused || fallingTilesCount > 0 || animationInProgress) return;
@@ -971,14 +1012,13 @@ document.addEventListener('DOMContentLoaded', () => {
            if (score > bestScore) {
                 bestScore = score;
                 bestScoreDisplay.textContent = bestScore;
-                localStorage.setItem('bestScore', bestScore);
+                localStorage.setItem('BestScore', bestScore);
                 
-                // Сохраняем лучший счет в данных игрока
                 if (player) {
                     player.setData({ bestScore });
                 }
                 
-                // Play new record sound if this is a new high score and sound hasn't played yet
+                
                 if (!hasNewRecordSoundPlayed) {
                     if (isSoundEnabled) {
                         newRecordSound.currentTime = 0;
@@ -993,15 +1033,14 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 checkGameOver();
                 isMoving = false;
-                swipeAnimationInProgress = false; // Сбрасываем флаг анимации свайпа
+                swipeAnimationInProgress = false;
             }, 100);
         } else {
             isMoving = false;
-            swipeAnimationInProgress = false; // Сбрасываем флаг анимации свайпа
+            swipeAnimationInProgress = false;
         }
     }
     
-    // Update the board view after moves
     function updateBoardView() {
         const tiles = document.querySelectorAll('.tile:not(.falling-tile)');
         tiles.forEach(tile => {
@@ -1017,9 +1056,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Check if game is over
     function checkGameOver() {
-        // Check for empty cells
         for (let row = 0; row < gridSize; row++) {
             for (let col = 0; col < gridSize; col++) {
                 if (board[row][col] === null) {
@@ -1028,12 +1065,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Check for possible merges
         for (let row = 0; row < gridSize; row++) {
             for (let col = 0; col < gridSize; col++) {
                 const value = board[row][col];
                 
-                // Check adjacent tiles
                 if (row > 0 && board[row - 1][col] === value) return false;
                 if (row < gridSize - 1 && board[row + 1][col] === value) return false;
                 if (col > 0 && board[row][col - 1] === value) return false;
@@ -1041,12 +1076,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Game over
         gameOver();
         return true;
     }
     
-    // Game over function
     function gameOver() {
         if (isGameOver) return;
         
@@ -1057,25 +1090,22 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(dropTimerInterval);
         updatePlayerScore();
         
-        // Показываем или скрываем кнопку второго шанса в зависимости от того, был ли он уже использован
         if (hasSecondChance) {
             document.getElementById('second-chance-button').style.display = 'flex';
         } else {
             document.getElementById('second-chance-button').style.display = 'none';
         }
         
-        // Уведомляем SDK об окончании геймплея
         if (ysdk && ysdk.features && ysdk.features.GameplayAPI) {
             ysdk.features.GameplayAPI.stop();
         }
         
-        // Play lose sound
         if (isSoundEnabled) {
             loseSound.currentTime = 0;
             loseSound.play();
         }
     }
-    // Event listeners for keyboard controls
+
     document.addEventListener('keydown', (e) => {
         if (isGameOver) return;
         
@@ -1104,13 +1134,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // Restart button event listener
     restartButton.addEventListener('click', () => {
-        // Показываем полноэкранную рекламу перед перезапуском
         showFullscreenAd();
     });
     
-    // Touch controls for mobile
     let touchStartX = 0;
     let touchStartY = 0;
     let touchEndX = 0;
@@ -1131,7 +1158,6 @@ document.addEventListener('DOMContentLoaded', () => {
     gridContainer.addEventListener('touchend', (e) => {
         if (isGameOver || !touchStartX || !touchStartY || isPaused) return;
         
-        // Проверяем, что до падения осталось больше 200 мс
         if (timeUntilNextDrop <= 500) {
             touchStartX = 0;
             touchStartY = 0;

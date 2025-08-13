@@ -1,14 +1,83 @@
+@media (max-width: 1240px) {
+    body {
+        transform: scale(0.9) translateY(-20px);
+    }
+    
+    .container {
+        max-width: 450px; /* уменьшаем на 10% от 500px */
+    }
+    
+    .grid-cell, .tile, .falling-tile {
+        width: 72px; /* уменьшаем на 10% от 80px */
+        height: 72px;
+    }
+    
+    .preview-cell {
+        width: 72px; /* уменьшаем на 10% от 80px */
+        height: 72px;
+    }
+    
+    .grid-container {
+        height: 360px; /* уменьшаем на 10% от 400px */
+    }
+    
+    /* Уменьшаем шрифты для сохранения пропорций */
+    h1 {
+        font-size: 38px;
+    }
+    
+    .tile, .grid-cell {
+        font-size: 32px;
+    }
+    
+    .tile-128, .tile-256, .tile-512 {
+        font-size: 27px;
+    }
+    
+    .tile-1024, .tile-2048 {
+        font-size: 23px;
+    }
+    
+    .preview-cell {
+        font-size: 20px;
+    }
+    
+    /* Корректируем другие размеры */
+    .score-box {
+        min-width: 108px; /* уменьшаем на 10% от 120px */
+        font-size: 16px;
+    }
+    
+    .score-title {
+        font-size: 13px;
+    }
+    
+    .start-button, .restart-button {
+        padding: 11px 27px;
+        font-size: 16px;
+    }
+    
+    .game-over-text {
+        font-size: 43px;
+    }
+    
+    .game-over-score {
+        font-size: 16pt;
+    }
+}
+
+/* Остальной ваш CSS остается без изменений */
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    -webkit-touch-callout: none; /* предотвращает вызов контекстного меню на iOS */
-    -webkit-user-select: none; /* предотвращает выделение текста на iOS/Safari */
-    -khtml-user-select: none; /* предотвращает выделение текста на Konqueror */
-    -moz-user-select: none; /* предотвращает выделение текста на Firefox */
-    -ms-user-select: none; /* предотвращает выделение текста на IE/Edge */
-    user-select: none; /* предотвращает выделение текста */
-    touch-action: manipulation; /* оптимизация для touch-устройств */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
 }
 
 body {
@@ -22,7 +91,7 @@ body {
     align-items: center;
     color: #f8f8f8;
     transform: translateY(-20px);
-    overflow: hidden; /* предотвращает прокрутку страницы */
+    overflow: hidden;
 }
 
 .container {
@@ -252,7 +321,7 @@ h1 {
 
 #timer-text{
     position: absolute;
-    top: 7px;
+    top: 8px;
     left: 45%;
     color: white;
 
@@ -476,7 +545,7 @@ h1 {
     transform: translateY(-50px);
 }
 
-@media (max-width: 500px) {
+@media (max-width: 800px) {
 
     .score-box {
         min-width: calc(50% - 10px);
@@ -490,7 +559,7 @@ h1 {
 
     .container{
         padding: 5px;
-        margin-top: 95px;
+        margin-top: 100px;
     }
 
     .grid-cell {
@@ -507,7 +576,7 @@ h1 {
     }
     
     .falling-tile {
-        width: 74px;
+        width: 80px;
         height: 80px;
         font-size: 30px;
     }
@@ -867,5 +936,21 @@ h1 {
     
     .leaderboard-container h3 {
         font-size: 18px;
+    }
+}
+
+@media (max-width: 1240px) {
+    .falling-tile {
+        width: calc(80px * 0.9);
+        height: calc(80px * 0.9);
+        font-size: calc(35px * 0.9);
+    }
+}
+
+@media (max-width: 800px) {
+    .falling-tile {
+        width: calc(80px * 0.8);
+        height: calc(80px * 0.8);
+        font-size: calc(35px * 0.8);
     }
 }
