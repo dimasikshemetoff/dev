@@ -75,11 +75,11 @@
                 </div>
             </div>
             
-            <div class="game-over" id="game-over">
+            <div class="game-over" id="game-over" style="display: none;">
                 <div class="game-over-text">Игра окончена!</div>
                 <div class="game-over-score">Ваш счет: <span id="final-score">0</span></div>
                 <button class="restart-button" id="restart-button">Играть снова</button>
-                <button class="second-chance-button restart-button" id="second-chance-button">Второй шанс</button>
+                <button class="second-chance-button restart-button" style="display: flex;" id="second-chance-button">Второй шанс<img src="ad.png" alt="adv" width="30px"></button>
             </div>
         </div>
         
@@ -87,8 +87,20 @@
         <audio id="merge-sound" src="merge.mp3" preload="auto"></audio>
         <audio id="newrecord-sound" src="newrecord.mp3" preload="auto"></audio>
         <audio id="pauseresume-sound" src="pauseresume.mp3" preload="auto"></audio>
+        <div class="leaderboard-modal" id="leaderboard-modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Таблица лидеров</h2>
+                    <span class="close-modal" id="close-modal">&times;</span>
+                </div>
+                <div class="leaderboard-list-container">
+                    <div class="leaderboard-list" id="leaderboard-list">
+                        <!-- Top players and player position will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    
     
     <script src="script.js"></script>
 </body>
