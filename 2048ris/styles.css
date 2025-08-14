@@ -300,15 +300,14 @@ body{
 
 .falling-area {
     position: absolute;
-    top: 0;
-    height: 30px;
+    left: 0;
+    height: 100%;
     z-index: 1;
 }
 
 .falling-tile {
     position: absolute;
-    width: 22%;
-    aspect-ratio: 1/1;
+    width: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -318,7 +317,7 @@ body{
     color: #f8f8f8;
     z-index: 15;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    transform: translateY(-50px);
+    /* transform: translateY(-50px); */
 }
 
 
@@ -392,7 +391,7 @@ body{
 }
 
 .tile {
-    transform: translateY(-50%);
+    top: 0;
     position: absolute;
     width: 100%;
     aspect-ratio: 1/1;
@@ -409,7 +408,7 @@ body{
 }
 
 .tile-new {
-    animation: appear 0.3s;
+    animation: appear 0.5s;
 }
 
 
@@ -427,8 +426,8 @@ body{
 
 
 @keyframes appear {
-    0% { transform: scale(0.8); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
+    0% { transform: scale(0.98); }
+    100% { transform: scale(1); }
 }
 
 @keyframes fallBounce {

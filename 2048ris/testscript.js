@@ -1,35 +1,122 @@
-// Инициализация Yandex SDK
-let ysdk;
+// =============================================
+// ЗАГЛУШКИ ДЛЯ ТЕСТИРОВАНИЯ БЕЗ YANDEX SDK
+// =============================================
+
+const ysdk = {
+    environment: {
+        i18n: {
+            lang: 'ru'
+        }
+    },
+    features: {
+        LoadingAPI: {
+            ready: function() { console.log('[MOCK] LoadingAPI.ready() called'); }
+        },
+        GameplayAPI: {
+            start: function() { console.log('[MOCK] GameplayAPI.start() called'); },
+            stop: function() { console.log('[MOCK] GameplayAPI.stop() called'); }
+        }
+    },
+    getPlayer: function() {
+        return Promise.resolve({
+            isAuthorized: function() { 
+                console.log('[MOCK] Player.isAuthorized() called');
+                return false; 
+            },
+            getData: function(keys) { 
+                console.log(`[MOCK] Player.getData() called with keys: ${keys}`);
+                const data = { bestScore: localStorage.getItem('BestScore') || 0 };
+                return Promise.resolve(data);
+            },
+            setData: function(data) { 
+                console.log('[MOCK] Player.setData() called with:', data);
+                if (data.bestScore) {
+                    localStorage.setItem('BestScore', data.bestScore);
+                }
+                return Promise.resolve(); 
+            }
+        });
+    },
+    leaderboards: {
+        getEntries: function(leaderboardName, options) { 
+            console.log(`[MOCK] Leaderboards.getEntries() called for ${leaderboardName}`, options);
+            return Promise.resolve({ 
+                entries: [
+                    { rank: 1, score: 5000, formattedScore: "5,000", player: { publicName: "Топ Игрок" } },
+                    { rank: 2, score: 4000, formattedScore: "4,000", player: { publicName: "Второй Игрок" } },
+                    { rank: 3, score: 3000, formattedScore: "3,000", player: { uniqueID: "abc123" } }
+                ] 
+            }); 
+        },
+        getPlayerEntry: function(leaderboardName) { 
+            console.log(`[MOCK] Leaderboards.getPlayerEntry() called for ${leaderboardName}`);
+            return Promise.resolve({ 
+                rank: 10, 
+                score: 1500, 
+                formattedScore: "1,500", 
+                player: { publicName: "Тестовый Игрок" } 
+            }); 
+        },
+        setScore: function(leaderboardName, score) { 
+            console.log(`[MOCK] Leaderboards.setScore() called for ${leaderboardName} with score ${score}`);
+            return Promise.resolve(); 
+        }
+    },
+    adv: {
+        showRewardedVideo: function(options) { 
+            console.log('[MOCK] Rewarded ad requested');
+            // Симулируем показ рекламы с задержкой
+            setTimeout(() => {
+                if (options.callbacks.onOpen) options.callbacks.onOpen();
+                setTimeout(() => {
+                    if (options.callbacks.onRewarded) options.callbacks.onRewarded();
+                    if (options.callbacks.onClose) options.callbacks.onClose(true);
+                }, 1000);
+            }, 500);
+        },
+        showFullscreenAdv: function(options) { 
+            console.log('[MOCK] Fullscreen ad requested');
+            // Симулируем показ рекламы с задержкой
+            setTimeout(() => {
+                if (options.callbacks.onOpen) options.callbacks.onOpen();
+                setTimeout(() => {
+                    if (options.callbacks.onClose) options.callbacks.onClose(true);
+                }, 1000);
+            }, 500);
+        }
+    },
+    isAvailableMethod: function(method) {
+        console.log(`[MOCK] Checking availability for method: ${method}`);
+        return Promise.resolve(true);
+    }
+};
+
+window.ysdk = ysdk;
 let player;
-let currentLanguage = 'ru'; 
+let currentLanguage = 'ru';
 
-YaGames.init().then(_ysdk => {
-    ysdk = _ysdk;
-    window.ysdk = ysdk;
-    console.log('Yandex SDK initialized');
-
-    // Автоматическое определение языка
+// Имитация инициализации SDK
+Promise.resolve().then(() => {
+    console.log('[MOCK] Yandex SDK initialized');
+    
     if (ysdk.environment && ysdk.environment.i18n) {
         currentLanguage = ysdk.environment.i18n.lang;
-        console.log('Detected language:', currentLanguage);
+        console.log('[MOCK] Detected language:', currentLanguage);
     }
 
-    if (ysdk && ysdk.features && ysdk.features.LoadingAPI) {
+    if (ysdk.features && ysdk.features.LoadingAPI) {
         ysdk.features.LoadingAPI.ready();
     }
     
-    // Инициализация игрока
     return ysdk.getPlayer();
 }).then(_player => {
     player = _player;
-    console.log('Player initialized');
+    console.log('[MOCK] Player initialized');
     
     if (!player.isAuthorized()) {
-        console.log('Player is not authorized - leaderboard features will be limited');
-        // Можно предложить игроку авторизоваться
+        console.log('[MOCK] Player is not authorized');
     }
     
-    // Загружаем лучший счет из данных игрока
     return player.getData(['BestScore']);
 }).then(data => {
     if (data && data.bestScore) {
@@ -38,11 +125,12 @@ YaGames.init().then(_ysdk => {
         localStorage.setItem('BestScore', data.bestScore);
     }
 }).catch(err => {
-    console.error('Yandex SDK initialization error:', err);
+    console.error('[MOCK] SDK initialization error:', err);
 });
 
-// Объявление звуков глобально
-let loseSound, mergeSound, newRecordSound, pauseResumeSound;
+// =============================================
+// ОСНОВНОЙ КОД ИГРЫ (без изменений)
+// =============================================
 
 document.addEventListener('DOMContentLoaded', () => {
     const gridSize = 4;
@@ -93,35 +181,37 @@ document.addEventListener('DOMContentLoaded', () => {
     let pausedTimeRemaining = 0;
     let totalDropTime = 5000;
     
-    // Инициализация звуков
-    loseSound = document.getElementById('lose-sound');
-    mergeSound = document.getElementById('merge-sound');
-    newRecordSound = document.getElementById('newrecord-sound');
-    pauseResumeSound = document.getElementById('pauseresume-sound');
-    
-    // Установка начальной громкости
-    if (loseSound) loseSound.volume = 0.2;
-    if (mergeSound) mergeSound.volume = 0.1;
-    if (newRecordSound) newRecordSound.volume = 0.5;
-    if (pauseResumeSound) pauseResumeSound.volume = 0.1;
+    // Sound elements
+    const loseSound = document.getElementById('lose-sound');
+    const mergeSound = document.getElementById('merge-sound');
+    const newRecordSound = document.getElementById('newrecord-sound');
+    const pauseResumeSound = document.getElementById('pauseresume-sound');
 
-    document.addEventListener("visibilitychange", () => {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+
+    function handleVisibilityChange() {
         if (document.hidden) {
-            if (loseSound) loseSound.volume = 0;
-            if (mergeSound) mergeSound.volume = 0;
-            if (newRecordSound) newRecordSound.volume = 0;
-            if (pauseResumeSound) pauseResumeSound.volume = 0;
-        } else if (!document.hidden) {
-            if (loseSound) loseSound.volume = 0.2;
-            if (mergeSound) mergeSound.volume = 0.1;
-            if (newRecordSound) newRecordSound.volume = 0.5;
-            if (pauseResumeSound) pauseResumeSound.volume = 0.1;
+            pauseAllSounds();
+        } else if (!isPaused && isSoundEnabled) {
+            resumeAllSounds();
         }
-        });
+    }
 
+    function handleWindowBlur() {
+        if (!document.hidden) return;
+        pauseAllSounds();
+    }
 
+    function pauseAllSounds() {
+        if (loseSound) loseSound.pause();
+        if (mergeSound) mergeSound.pause();
+        if (newRecordSound) newRecordSound.pause();
+        if (pauseResumeSound) pauseResumeSound.pause();
+    }
+    
     function resumeAllSounds() {
-        if (!isSoundEnabled || document.hidden) return;
+        if (!isSoundEnabled) return;
         
         if (loseSound) loseSound.volume = 0.2;
         if (mergeSound) mergeSound.volume = 0.1;
@@ -132,24 +222,6 @@ document.addEventListener('DOMContentLoaded', () => {
     soundButton.addEventListener('click', toggleSound);
     bestScoreDisplay.textContent = bestScore;
     
-    function toggleSound() {
-        isSoundEnabled = !isSoundEnabled;
-        
-        if (isSoundEnabled) {
-            soundButton.classList.remove('muted');
-            soundIcon.textContent = '🔊';
-            resumeAllSounds();
-        } else {
-            soundButton.classList.add('muted');
-            soundIcon.textContent = '🔇';
-            // Обнуляем громкость всех звуков
-            if (loseSound) loseSound.volume = 0;
-            if (mergeSound) mergeSound.volume = 0;
-            if (newRecordSound) newRecordSound.volume = 0;
-            if (pauseResumeSound) pauseResumeSound.volume = 0;
-        }
-    }
-
     startButton.addEventListener('click', () => {
         startScreen.style.display = 'none';
         gameContainer.style.display = 'block';
@@ -161,6 +233,20 @@ document.addEventListener('DOMContentLoaded', () => {
     
     pauseButton.addEventListener('click', togglePause);
     secondChanceButton.addEventListener('click', showRewardedAd);
+
+    function toggleSound() {
+        isSoundEnabled = !isSoundEnabled;
+        
+        if (isSoundEnabled) {
+            soundButton.classList.remove('muted');
+            soundIcon.textContent = '🔊';
+            resumeAllSounds();
+        } else {
+            soundButton.classList.add('muted');
+            soundIcon.textContent = '🔇';
+            pauseAllSounds();
+        }
+    }
 
     leaderboardBox.addEventListener('click', () => {
         if (isGameOver) return;
@@ -176,6 +262,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     closeModal.addEventListener('click', () => {
         leaderboardModal.style.display = 'none';
+        if (!isPaused) {
+            togglePause();
+        }
     });
 
     function formatPlayerName(player) {
@@ -186,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadLeaderboardData() {
         if (!ysdk || !ysdk.leaderboards) {
+            leaderboardList.innerHTML = '<div class="no-data">Лидерборд недоступен</div>';
             return Promise.resolve();
         }
         
@@ -195,10 +285,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 includeUser: false
             }),
             ysdk.leaderboards.getPlayerEntry(leaderboardName).catch(err => {
-                if (err.code === 'LEADERBOARD_PLAYER_NOT_PRESENT') {
-                    return null;
-                }
-                throw err;
+                console.log('Leaderboard player entry error:', err);
+                return null;
             })
         ]).then(([topEntries, playerEntry]) => {
             leaderboardList.innerHTML = '';
@@ -374,6 +462,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         hasNewRecordSoundPlayed = false;
         
+        if (loseSound) loseSound.volume = 0.2;
+        if (mergeSound) mergeSound.volume = 0.1;
+        if (newRecordSound) newRecordSound.volume = 0.5;
+        if (pauseResumeSound) pauseResumeSound.volume = 0.1;
+        
         initLeaderboard();
         
         for (let i = 0; i < gridSize; i++) {
@@ -425,6 +518,83 @@ document.addEventListener('DOMContentLoaded', () => {
         
         startDropTimer();
         scheduleNextDrop();
+    }
+    
+    function initLeaderboard() {
+        if (!ysdk || !ysdk.leaderboards) {
+            console.log('Leaderboards not available');
+            document.getElementById('leaderboard-box').style.display = 'none';
+            return;
+        }
+        
+        ysdk.isAvailableMethod('leaderboards.getPlayerEntry').then(available => {
+            if (available) {
+                document.getElementById('leaderboard-box').style.display = 'flex';
+                updateLeaderboard();
+            } else {
+                console.log('Leaderboards methods not available for this user');
+                document.getElementById('leaderboard-box').style.display = 'none';
+            }
+        }).catch(err => {
+            console.log('Error checking leaderboard availability:', err);
+            document.getElementById('leaderboard-box').style.display = 'none';
+        });
+    }
+    
+    function updateLeaderboard() {
+        if (!ysdk || !ysdk.leaderboards) return Promise.resolve();
+        
+        return Promise.all([
+            ysdk.leaderboards.getEntries(leaderboardName, {
+                quantityTop: 5,
+                includeUser: false
+            }),
+            ysdk.leaderboards.getPlayerEntry(leaderboardName).catch(err => {
+                if (err.code === 'LEADERBOARD_PLAYER_NOT_PRESENT') {
+                    return null;
+                }
+                throw err;
+            })
+        ]).then(([topEntries, playerEntry]) => {
+            displayLeaderboardData(topEntries);
+            displayPlayerRank(playerEntry);
+        }).catch(err => {
+            console.error('Error loading leaderboard data:', err);
+        });
+    }
+
+    function displayLeaderboardData(topEntries) {
+        leaderboardList.innerHTML = '';
+        
+        if (topEntries && topEntries.entries && topEntries.entries.length > 0) {
+            topEntries.entries.forEach(entry => {
+                const playerElement = document.createElement('div');
+                playerElement.className = 'leaderboard-entry';
+                playerElement.innerHTML = `
+                    <span class="leaderboard-rank">${entry.rank}.</span>
+                    <span class="leaderboard-name">${formatPlayerName(entry.player)}</span>
+                    <span class="leaderboard-score">${entry.formattedScore || entry.score}</span>
+                `;
+                leaderboardList.appendChild(playerElement);
+            });
+        } else {
+            leaderboardList.innerHTML = '<div class="no-data">Нет данных</div>';
+        }
+    }
+
+    function displayPlayerRank(entry) {
+        const rankElement = document.getElementById('player-rank');
+        
+        if (entry) {
+            playerRank = entry.rank;
+            rankElement.textContent = entry.rank;
+            
+            if (score > 0 && score > entry.score) {
+                updatePlayerScore();
+            }
+        } else {
+            rankElement.textContent = '-';
+        }
     }
     
     function generateNextTile() {
@@ -480,86 +650,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
-    function initLeaderboard() {
-        if (!ysdk || !ysdk.leaderboards) {
-            console.log('Leaderboards not available');
-            document.getElementById('leaderboard-box').style.display = 'none';
-            return;
-        }
-        
-        // Проверяем доступность лидербордов для данного пользователя
-        ysdk.isAvailableMethod('leaderboards.getPlayerEntry').then(available => {
-            if (available) {
-                document.getElementById('leaderboard-box').style.display = 'flex';
-                updateLeaderboard();
-            } else {
-                console.log('Leaderboards methods not available for this user');
-                document.getElementById('leaderboard-box').style.display = 'none';
-            }
-        }).catch(err => {
-            console.log('Error checking leaderboard availability:', err);
-            document.getElementById('leaderboard-box').style.display = 'none';
-        });
-    }
-
-    function updateLeaderboard() {
-        if (!ysdk || !ysdk.leaderboards) return Promise.resolve();
-        
-        return Promise.all([
-            ysdk.leaderboards.getEntries(leaderboardName, {
-                quantityTop: 5,
-                includeUser: false
-            }),
-            ysdk.leaderboards.getPlayerEntry(leaderboardName).catch(err => {
-                if (err.code === 'LEADERBOARD_PLAYER_NOT_PRESENT') {
-                    return null;
-                }
-                throw err;
-            })
-        ]).then(([topEntries, playerEntry]) => {
-            // Обновляем UI лидерборда
-            displayLeaderboardData(topEntries);
-            displayPlayerRank(playerEntry);
-        }).catch(err => {
-            console.error('Error loading leaderboard data:', err);
-        });
-    }
-
-    function displayLeaderboardData(topEntries) {
-        leaderboardList.innerHTML = '';
-        
-        if (topEntries && topEntries.entries && topEntries.entries.length > 0) {
-            topEntries.entries.forEach(entry => {
-                const playerElement = document.createElement('div');
-                playerElement.className = 'leaderboard-entry';
-                playerElement.innerHTML = `
-                    <span class="leaderboard-rank">${entry.rank}.</span>
-                    <span class="leaderboard-name">${formatPlayerName(entry.player)}</span>
-                    <span class="leaderboard-score">${entry.formattedScore || entry.score}</span>
-                `;
-                leaderboardList.appendChild(playerElement);
-            });
-        } else {
-            leaderboardList.innerHTML = '<div class="no-data">Нет данных</div>';
-        }
-    }
-
-    function displayPlayerRank(entry) {
-        const rankElement = document.getElementById('player-rank');
-        
-        if (entry) {
-            playerRank = entry.rank;
-            rankElement.textContent = entry.rank;
-            
-            if (score > 0 && score > entry.score) {
-                updatePlayerScore();
-            }
-        } else {
-            rankElement.textContent = '-';
-        }
-    }
-        
+    
     function scheduleNextDrop() {
         const now = Date.now();
         const timeSinceLastDrop = now - lastDropTime;
@@ -581,7 +672,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dropInterval) clearInterval(dropInterval);
         
         dropInterval = setTimeout(() => {
-            if (!isGameOver && !isMoving && !isPaused) {
+            if (!isGameOver && !isMoving && !isPaused && fallingTilesCount === 0 && !animationInProgress) {
                 addFallingTileFromQueue();
             }
             lastDropTime = Date.now();
@@ -651,24 +742,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updatePlayerScore() {
-        // Проверяем доступность SDK и лидербордов
         if (!ysdk || !ysdk.leaderboards || score <= 0) {
             console.log('Leaderboards not available or invalid score');
             return;
         }
 
-        // Проверяем, что это действительно новый рекорд
         if (score >= bestScore) {
             console.log('Score is new record');
         }
 
-        // Проверяем авторизацию игрока
         if (!player || !player.isAuthorized()) {
             console.log('Player not authorized, cannot update leaderboard');
             return;
         }
 
-        // Проверяем доступность метода
         ysdk.isAvailableMethod('leaderboards.setScore')
             .then(available => {
                 if (!available) {
@@ -676,7 +763,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                // Защита от слишком частых запросов
                 const now = Date.now();
                 if (window.lastLeaderboardUpdate && 
                     (now - window.lastLeaderboardUpdate) < 1000) {
@@ -685,19 +771,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                // Пытаемся обновить результат
                 ysdk.leaderboards.setScore(leaderboardName, score)
                     .then(() => {
                         console.log('Score successfully updated in leaderboard:', score);
                         window.lastLeaderboardUpdate = Date.now();
-                        
-                        // Обновляем локальное представление лидерборда
                         return updateLeaderboard();
                     })
                     .catch(err => {
                         console.error('Error updating leaderboard score:', err);
                         
-                        // Обработка специфических ошибок
                         if (err.code === 'LEADERBOARD_TOO_MANY_REQUESTS') {
                             console.log('Too many requests, retrying in 1 second');
                             setTimeout(updatePlayerScore, 1000);
@@ -725,54 +807,53 @@ document.addEventListener('DOMContentLoaded', () => {
         const fallingTile = document.createElement('div');
         fallingTile.className = `falling-tile tile-${value}`;
         fallingTile.textContent = value;
-        
-        const bodyStyle = window.getComputedStyle(document.body);
-        const transformValue = bodyStyle.getPropertyValue('transform');
-        let scale = 1;
-        
-        if (transformValue !== 'none') {
-            const matrix = transformValue.match(/^matrix\((.+)\)$/);
-            if (matrix) {
-                const values = matrix[1].split(', ');
-                scale = parseFloat(values[0]);
-            }
-        }
-        
+
+        // Получаем реальные размеры ячейки игрового поля
         const cell = document.getElementById('cell-0-0');
         const cellRect = cell.getBoundingClientRect();
         const gridRect = gridContainer.getBoundingClientRect();
-        
-        const leftPos = (cellRect.left - gridRect.left) / scale + col * (cellRect.width / scale + 15 / scale);
+
+        // Используем фактические размеры ячейки вместо фиксированных значений
+        const tileWidth = cellRect.width;
+        const tileHeight = cellRect.height;
+
+        // Рассчитываем позицию с учетом отступов между ячейками
+        const leftPos = (cellRect.left - gridRect.left) + 
+                    col * (tileWidth + 10); // 10px - gap между ячейками
+
         fallingTile.style.left = `${leftPos}px`;
         fallingTile.style.top = '0';
         
-        fallingTile.style.width = `${80 / scale}px`;
-        fallingTile.style.height = `${80 / scale}px`;
-        fallingTile.style.fontSize = `${35 / scale}px`;
+        // Устанавливаем реальные размеры плитки
+        fallingTile.style.width = `${tileWidth}px`;
+        fallingTile.style.height = `${tileHeight}px`;
         
+        // Автоматическая подстройка размера шрифта
+        fallingTile.style.fontSize = `${tileWidth * 0.4}px`; // 40% от ширины плитки
+
         fallingArea.appendChild(fallingTile);
-        
+
         fallingTile.getBoundingClientRect();
-        
+
         let landingRow = 0;
         while (landingRow < gridSize && board[landingRow][col] === null) {
             landingRow++;
         }
-        
-        const finalTop = (cellRect.top - gridRect.top) / scale + 
-                        (landingRow > 0 ? landingRow - 1 : 0) * (cellRect.height / scale + 15 / scale) - 
-                        15 / scale;
-        
+
+        // Рассчитываем конечную позицию с учетом реальных размеров
+        const finalTop = (cellRect.top - gridRect.top) + 
+                    (landingRow > 0 ? landingRow - 1 : 0) * (tileHeight + 10) - 
+                    10; // 10px - gap между ячейками
+
         fallingTile.style.transition = 'transform 0.5s ease-in-out';
         fallingTile.style.transform = `translateY(${finalTop}px)`;
-        
+
         setTimeout(() => {
             if (landingRow === gridSize) {
                 landingRow = gridSize - 1;
                 board[landingRow][col] = value;
                 addTile(landingRow, col, value);
                 fallingTile.remove();
-                
                 checkTopRowFull();
             } else {
                 if (landingRow < gridSize && board[landingRow][col] === value) {
@@ -784,7 +865,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         board[landingRow][col] = value;
                         addTile(landingRow, col, value);
                         fallingTile.remove();
-                        
                         checkTopRowFull();
                     } else {
                         gameOver();
@@ -864,7 +944,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 tileElement.style.transform = 'scale(1)';
                 tileElement.style.filter = 'filter: contrast(1)';
-            }, 400);
+            }, 100);
         } else {
             addTile(row, col, newValue);
         }
@@ -875,11 +955,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        if (isGameOver || isMoving || isPaused) return;
+        if (isGameOver || isMoving || isPaused || fallingTilesCount > 0 || animationInProgress) return;
         
         isMoving = true;
         let moved = false;
         const oldBoard = JSON.parse(JSON.stringify(board));
+        
         if (direction === 'up') {
             for (let col = 0; col < gridSize; col++) {
                 let mergePosition = 0;
@@ -1004,7 +1085,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (moved) {
             scoreDisplay.textContent = score;
-           if (score > bestScore) {
+            if (score > bestScore) {
                 bestScore = score;
                 bestScoreDisplay.textContent = bestScore;
                 localStorage.setItem('BestScore', bestScore);
@@ -1092,7 +1173,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ysdk.features.GameplayAPI.stop();
         }
         
-        if (isSoundEnabled) {
+        if (isSoundEnabled && loseSound) {
             loseSound.currentTime = 0;
             loseSound.play();
         }
