@@ -322,11 +322,38 @@ document.addEventListener('DOMContentLoaded', () => {
         isGameOver = false;
         gameOverDisplay.style.display = 'none';
         
+        // Удаляем все плитки со значениями ниже 16 (2, 4, 8)
+        for (let row = 0; row < gridSize; row++) {
+            for (let col = 0; col < gridSize; col++) {
+                if (board[row][col] !== null && board[row][col] < 16) {
+                    const tile = document.getElementById(`tile-${row}-${col}`);
+                    if (tile) tile.remove();
+                    board[row][col] = null;
+                }
+            }
+        }
+        
+        // Перемещаем оставшиеся плитки вниз
         for (let col = 0; col < gridSize; col++) {
-            if (board[0][col] !== null) {
-                const tile = document.getElementById(`tile-0-${col}`);
-                if (tile) tile.remove();
-                board[0][col] = null;
+            let emptyRow = gridSize - 1;
+            
+            // Проходим снизу вверх
+            for (let row = gridSize - 1; row >= 0; row--) {
+                if (board[row][col] !== null) {
+                    if (row !== emptyRow) {
+                        // Перемещаем плитку вниз
+                        board[emptyRow][col] = board[row][col];
+                        board[row][col] = null;
+                        
+                        // Обновляем DOM
+                        const tile = document.getElementById(`tile-${row}-${col}`);
+                        if (tile) {
+                            tile.remove();
+                            addTile(emptyRow, col, board[emptyRow][col]);
+                        }
+                    }
+                    emptyRow--;
+                }
             }
         }
         
@@ -581,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dropInterval) clearInterval(dropInterval);
         
         dropInterval = setTimeout(() => {
-            if (!isGameOver && !isMoving && !isPaused) {
+            if (!isGameOver && !isMoving && !isPaused && fallingTilesCount === 0) {
                 addFallingTileFromQueue();
             }
             lastDropTime = Date.now();
@@ -657,66 +684,83 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Проверяем, что это действительно новый рекорд
-        if (score >= bestScore) {
-            console.log('Score is new record');
-        }
-
-        // Проверяем авторизацию игрока
-        if (!player || !player.isAuthorized()) {
-            console.log('Player not authorized, cannot update leaderboard');
-            return;
-        }
-
-        // Проверяем доступность метода
-        ysdk.isAvailableMethod('leaderboards.setScore')
-            .then(available => {
-                if (!available) {
-                    console.log('Leaderboards.setScore method not available');
+        // Получаем текущий рекорд игрока
+        ysdk.leaderboards.getPlayerEntry(leaderboardName)
+            .then(currentEntry => {
+                // Если у игрока уже есть запись в лидерборде и текущий счет не больше
+                if (currentEntry && score <= currentEntry.score) {
+                    console.log('Current score is not better than existing record');
                     return;
                 }
 
-                // Защита от слишком частых запросов
-                const now = Date.now();
-                if (window.lastLeaderboardUpdate && 
-                    (now - window.lastLeaderboardUpdate) < 1000) {
-                    console.log('Leaderboard update too frequent, delaying');
-                    setTimeout(updatePlayerScore, 1000);
-                    return;
+                // Если игрок авторизован, сохраняем рекорд в его данные
+                if (player && player.isAuthorized()) {
+                    player.getData(['BestScore'])
+                        .then(data => {
+                            const playerBest = data && data.bestScore ? parseInt(data.bestScore) : 0;
+                            // Обновляем только если текущий счет больше
+                            if (score > playerBest) {
+                                return player.setData({ bestScore: score });
+                            }
+                        })
+                        .then(() => {
+                            // Обновляем лидерборд только если счет действительно новый рекорд
+                            return ysdk.leaderboards.setScore(leaderboardName, score);
+                        })
+                        .then(() => {
+                            console.log('Score successfully updated in leaderboard:', score);
+                            window.lastLeaderboardUpdate = Date.now();
+                            return updateLeaderboard();
+                        })
+                        .catch(err => {
+                            console.error('Error updating leaderboard score:', err);
+                            handleLeaderboardError(err);
+                        });
+                } else {
+                    // Для неавторизованных игроков используем localStorage
+                    const localBest = parseInt(localStorage.getItem('BestScore')) || 0;
+                    if (score > localBest) {
+                        localStorage.setItem('BestScore', score);
+                    }
+                    console.log('Player not authorized, score saved locally');
                 }
-
-                // Пытаемся обновить результат
-                ysdk.leaderboards.setScore(leaderboardName, score)
-                    .then(() => {
-                        console.log('Score successfully updated in leaderboard:', score);
-                        window.lastLeaderboardUpdate = Date.now();
-                        
-                        // Обновляем локальное представление лидерборда
-                        return updateLeaderboard();
-                    })
-                    .catch(err => {
-                        console.error('Error updating leaderboard score:', err);
-                        
-                        // Обработка специфических ошибок
-                        if (err.code === 'LEADERBOARD_TOO_MANY_REQUESTS') {
-                            console.log('Too many requests, retrying in 1 second');
-                            setTimeout(updatePlayerScore, 1000);
-                        } 
-                        else if (err.code === 'LEADERBOARD_PLAYER_NOT_PRESENT') {
-                            console.log('Player not present in leaderboard');
-                        }
-                        else if (err.code === 'NETWORK_ERROR') {
-                            console.log('Network error, retrying in 2 seconds');
-                            setTimeout(updatePlayerScore, 2000);
-                        }
-                        else {
-                            console.error('Permanent error, cannot update leaderboard');
-                        }
-                    });
             })
             .catch(err => {
-                console.error('Error checking method availability:', err);
+                if (err.code === 'LEADERBOARD_PLAYER_NOT_PRESENT') {
+                    // Если записи игрока нет, создаем новую
+                    ysdk.leaderboards.setScore(leaderboardName, score)
+                        .then(() => {
+                            console.log('New player record created in leaderboard:', score);
+                            window.lastLeaderboardUpdate = Date.now();
+                            return updateLeaderboard();
+                        })
+                        .catch(err => {
+                            console.error('Error creating leaderboard entry:', err);
+                            handleLeaderboardError(err);
+                        });
+                } else {
+                    console.error('Error checking player entry:', err);
+                    handleLeaderboardError(err);
+                }
             });
+    }
+
+    function handleLeaderboardError(err) {
+        // Обработка специфических ошибок
+        if (err.code === 'LEADERBOARD_TOO_MANY_REQUESTS') {
+            console.log('Too many requests, retrying in 1 second');
+            setTimeout(updatePlayerScore, 1000);
+        } 
+        else if (err.code === 'LEADERBOARD_PLAYER_NOT_PRESENT') {
+            console.log('Player not present in leaderboard');
+        }
+        else if (err.code === 'NETWORK_ERROR') {
+            console.log('Network error, retrying in 2 seconds');
+            setTimeout(updatePlayerScore, 2000);
+        }
+        else {
+            console.error('Permanent error, cannot update leaderboard');
+        }
     }
     
     function addFallingTile(col, value) {
@@ -871,11 +915,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function move(direction) {
-        if (timeUntilNextDrop <= 500) {
+        if (timeUntilNextDrop <= 200) {
             return;
         }
         
-        if (isGameOver || isMoving || isPaused) return;
+        if (isGameOver || isMoving || isPaused || fallingTilesCount > 0) return;
         
         isMoving = true;
         let moved = false;

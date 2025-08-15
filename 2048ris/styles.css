@@ -39,7 +39,12 @@ body{
 }
 
 
+@media (max-height: 700px){
+    body{
+        transform: translateY(-30px) scale(0.9);
 
+    }
+}
 
 
 
@@ -409,6 +414,11 @@ body{
 
 .tile-new {
     animation: appear 0.5s;
+}
+
+.tile-move {
+    transition: transform 0.15s ease-in-out;
+    z-index: 15;
 }
 
 

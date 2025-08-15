@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Раскрась поле</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: #f8f8f8;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .game-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: #ffd166;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .game-area {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            background: rgba(25, 25, 35, 0.8);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            border: 1px solid #4a4a6a;
+        }
+        
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .score-box {
+            background: linear-gradient(145deg, #2d4059, #1d2d44);
+            padding: 10px 15px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border: 1px solid #4a5975;
+            text-align: center;
+            min-width: 120px;
+        }
+        
+        .score-title {
+            font-size: 0.9rem;
+            display: block;
+            color: #a1b4cf;
+            margin-bottom: 5px;
+        }
+        
+        .game-canvas-container {
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+            background: #2d4059;
+            border-radius: 8px;
+            border: 1px solid #4a5975;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        #game-canvas {
+            display: block;
+            width: 100%;
+            background: #1d2d44;
+            image-rendering: pixelated;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+            max-width: 300px;
+            margin: 20px auto 0;
+        }
+        
+        .control-btn {
+            background: linear-gradient(145deg, #ff9a76, #ff7b54);
+            color: #1a1a2e;
+            border: none;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(255, 123, 84, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .control-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(255, 123, 84, 0.5);
+        }
+        
+        .control-btn:active {
+            transform: translateY(1px);
+        }
+        
+        #up-btn {
+            grid-column: 2;
+            grid-row: 1;
+        }
+        
+        #left-btn {
+            grid-column: 1;
+            grid-row: 2;
+        }
+        
+        #down-btn {
+            grid-column: 2;
+            grid-row: 2;
+        }
+        
+        #right-btn {
+            grid-column: 3;
+            grid-row: 2;
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 15, 30, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            border-radius: 8px;
+            display: none;
+            backdrop-filter: blur(3px);
+        }
+        
+        .game-over-text {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #ffd166;
+            margin-bottom: 20px;
+            text-shadow: 0 2px 10px rgba(255, 209, 102, 0.5);
+        }
+        
+        .game-over-stats {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .restart-button {
+            background: linear-gradient(145deg, #ff9a76, #ff7b54);
+            color: #1a1a2e;
+            border: none;
+            border-radius: 6px;
+            padding: 12px 25px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(255, 123, 84, 0.3);
+            margin-top: 10px;
+        }
+        
+        .restart-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(255, 123, 84, 0.5);
+        }
+        
+        .instructions {
+            background: rgba(25, 25, 35, 0.8);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 600px;
+        }
+        
+        .instructions h2 {
+            color: #ffd166;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .instructions p {
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+        
+        .key-hint {
+            display: inline-block;
+            background: #2d4059;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid #4a5975;
+            font-family: monospace;
+        }
+        
+        @media (max-width: 768px) {
+            .game-title {
+                font-size: 2rem;
+            }
+            
+            .score-box {
+                font-size: 1rem;
+                min-width: 100px;
+                padding: 8px 10px;
+            }
+            
+            .control-btn {
+                padding: 12px;
+                font-size: 1.2rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .game-header {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .control-btn {
+                padding: 10px;
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="game-title">Раскрась поле</h1>
+        
+        <div class="game-area">
+            <div class="game-header">
+                <div class="score-box">
+                    <span class="score-title">Раскрашено</span>
+                    <span id="painted-percent">0%</span>
+                </div>
+                <div class="score-box">
+                    <span class="score-title">Ходы</span>
+                    <span id="moves">0</span>
+                </div>
+                <div class="score-box">
+                    <span class="score-title">Время</span>
+                    <span id="timer">0:00</span>
+                </div>
+            </div>
+            
+            <div class="game-canvas-container">
+                <canvas id="game-canvas" width="512" height="512"></canvas>
+                
+                <div class="game-over" id="game-over">
+                    <div class="game-over-text">Победа!</div>
+                    <div class="game-over-stats">
+                        <p>Раскрашено: <span id="final-percent">100%</span></p>
+                        <p>Ходы: <span id="final-moves">0</span></p>
+                        <p>Время: <span id="final-time">0:00</span></p>
+                    </div>
+                    <button class="restart-button" id="restart-button">Играть снова</button>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button class="control-btn" id="up-btn">↑</button>
+                <button class="control-btn" id="left-btn">←</button>
+                <button class="control-btn" id="down-btn">↓</button>
+                <button class="control-btn" id="right-btn">→</button>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h2>Как играть</h2>
+            <p>Управляйте кубиком с помощью кнопок или клавиш <span class="key-hint">←</span> <span class="key-hint">↑</span> <span class="key-hint">↓</span> <span class="key-hint">→</span></p>
+            <p>Кубик двигается от стенки до стенки, окрашивая все клетки на своём пути.</p>
+            <p>В центре поля расположены вспомогательные кубики, которые помогут вам менять направление движения.</p>
+            <p>Цель: раскрасить всё поле!</p>
+        </div>
+    </div>
+
+    <script>
+        // Константы игры (уменьшаем размер сетки для лучшей видимости)
+        const GRID_SIZE = 32; // Уменьшили с 128 до 32
+        const CELL_SIZE = 16; // Увеличили размер клетки с 4 до 16 пикселей
+        const PLAYER_COLOR = '#3498db';
+        const PAINTED_COLOR = '#2ecc71';
+        const UNPAINTED_COLOR = '#34495e';
+        const WALL_COLOR = '#e74c3c';
+        const HELPER_COLOR = '#f39c12';
+        
+        // Элементы DOM
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const paintedPercentEl = document.getElementById('painted-percent');
+        const movesEl = document.getElementById('moves');
+        const timerEl = document.getElementById('timer');
+        const gameOverEl = document.getElementById('game-over');
+        const finalPercentEl = document.getElementById('final-percent');
+        const finalMovesEl = document.getElementById('final-moves');
+        const finalTimeEl = document.getElementById('final-time');
+        const restartButton = document.getElementById('restart-button');
+        
+        // Элементы управления
+        const upBtn = document.getElementById('up-btn');
+        const downBtn = document.getElementById('down-btn');
+        const leftBtn = document.getElementById('left-btn');
+        const rightBtn = document.getElementById('right-btn');
+        
+        // Состояние игры
+        let grid = [];
+        let player = { x: 0, y: 0 };
+        let paintedCells = 0;
+        let moves = 0;
+        let startTime = null;
+        let timerInterval = null;
+        let isGameOver = false;
+        
+        // Инициализация игры
+        function initGame() {
+            // Устанавливаем размер холста в зависимости от размера сетки и клеток
+            canvas.width = GRID_SIZE * CELL_SIZE;
+            canvas.height = GRID_SIZE * CELL_SIZE;
+            
+            // Создаем сетку
+            grid = Array(GRID_SIZE).fill().map(() => 
+                Array(GRID_SIZE).fill(0) // 0 - неокрашено
+            );
+            
+            // Размещаем игрока в центре
+            player = { 
+                x: Math.floor(GRID_SIZE / 2), 
+                y: Math.floor(GRID_SIZE / 2) 
+            };
+            grid[player.y][player.x] = 2; // 2 - игрок
+            
+            // Размещаем стены по краям
+            for (let i = 0; i < GRID_SIZE; i++) {
+                grid[0][i] = 1; // 1 - стена
+                grid[GRID_SIZE - 1][i] = 1;
+                grid[i][0] = 1;
+                grid[i][GRID_SIZE - 1] = 1;
+            }
+            
+            // Размещаем вспомогательные кубики
+            const center = Math.floor(GRID_SIZE / 2);
+            // Углы
+            grid[5][5] = 3;
+            grid[5][GRID_SIZE-6] = 3;
+            grid[GRID_SIZE-6][5] = 3;
+            grid[GRID_SIZE-6][GRID_SIZE-6] = 3;
+            
+            // Центральные
+            grid[center][center] = 3;
+            grid[center-5][center] = 3;
+            grid[center+5][center] = 3;
+            grid[center][center-5] = 3;
+            grid[center][center+5] = 3;
+            
+            // Сбрасываем счетчики
+            paintedCells = 1; // Начинаем с 1, так как игрок занимает одну клетку
+            moves = 0;
+            isGameOver = false;
+            gameOverEl.style.display = 'none';
+
+            // Обновляем интерфейс
+            updateStats();
+            
+            // Запускаем таймер
+            if (timerInterval) clearInterval(timerInterval);
+            startTime = Date.now();
+            timerInterval = setInterval(updateTimer, 1000);
+            
+            // Отрисовываем начальное состояние
+            drawGrid();
+        }
+        
+        // Отрисовка сетки с улучшенной визуализацией
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const cellValue = grid[y][x];
+                    let fillColor;
+                    
+                    switch (cellValue) {
+                        case 0: // Неокрашенная клетка
+                            fillColor = UNPAINTED_COLOR;
+                            break;
+                        case 1: // Стена
+                            fillColor = WALL_COLOR;
+                            break;
+                        case 2: // Игрок
+                            fillColor = PLAYER_COLOR;
+                            break;
+                        case 3: // Вспомогательный кубик
+                            fillColor = HELPER_COLOR;
+                            break;
+                        case 4: // Окрашенная клетка
+                            fillColor = PAINTED_COLOR;
+                            break;
+                    }
+                    
+                    // Рисуем клетку
+                    ctx.fillStyle = fillColor;
+                    ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    
+                    // Добавляем границы для лучшей видимости
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+                    ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    
+                    // Для игрока и вспомогательных кубиков добавляем эффект "кубика"
+                    if (cellValue === 2 || cellValue === 3) {
+                        // Тень снизу
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                        ctx.fillRect(x * CELL_SIZE + 2, y * CELL_SIZE + 2, CELL_SIZE - 2, CELL_SIZE - 2);
+                        
+                        // Основной цвет
+                        ctx.fillStyle = fillColor;
+                        ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE - 2, CELL_SIZE - 2);
+                        
+                        // Свет сверху
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE - 8, 4);
+                    }
+                }
+            }
+        }
+        
+        // Движение игрока
+        function movePlayer(dx, dy) {
+            if (isGameOver) return;
+            
+            let moved = false;
+            let newX = player.x;
+            let newY = player.y;
+            
+            // Двигаемся до тех пор, пока не встретим препятствие
+            while (true) {
+                const nextX = newX + dx;
+                const nextY = newY + dy;
+                
+                // Проверяем выход за границы
+                if (nextX < 0 || nextX >= GRID_SIZE || nextY < 0 || nextY >= GRID_SIZE) break;
+                
+                // Проверяем столкновение со стеной или вспомогательным кубиком
+                if (grid[nextY][nextX] === 1 || grid[nextY][nextX] === 3) break;
+                
+                // Перемещаем игрока
+                newX = nextX;
+                newY = nextY;
+                moved = true;
+            }
+            
+            if (moved) {
+                // Помечаем пройденный путь как окрашенный
+                markPath(player.x, player.y, newX, newY, dx, dy);
+                
+                // Обновляем позицию игрока
+                grid[player.y][player.x] = 4; // Помечаем старую позицию как окрашенную
+                player.x = newX;
+                player.y = newY;
+                grid[player.y][player.x] = 2; // Помечаем новую позицию как игрока
+                
+                // Увеличиваем счетчик ходов
+                moves++;
+                
+                // Обновляем статистику
+                updateStats();
+                
+                // Проверяем завершение игры
+                checkGameCompletion();
+                
+                // Перерисовываем поле
+                drawGrid();
+            }
+        }
+        
+        // Помечаем пройденный путь как окрашенный
+        function markPath(startX, startY, endX, endY, dx, dy) {
+            let x = startX;
+            let y = startY;
+            
+            while (x !== endX || y !== endY) {
+                // Помечаем текущую клетку как окрашенную
+                if (grid[y][x] !== 2) { // Не перезаписываем игрока
+                    // Увеличиваем счетчик только если клетка не была окрашена ранее
+                    if (grid[y][x] === 0) paintedCells++;
+                    grid[y][x] = 4;
+                }
+                
+                // Переходим к следующей клетке
+                x += dx;
+                y += dy;
+            }
+            
+            // Помечаем последнюю клетку
+            if (grid[y][x] === 0) paintedCells++;
+            grid[y][x] = 4;
+        }
+        
+        // Обновление статистики
+        function updateStats() {
+            const totalCells = (GRID_SIZE * GRID_SIZE) - 
+                             Array(GRID_SIZE).fill().reduce((acc, _, y) => 
+                                 acc + grid[y].filter(cell => cell === 1).length, 0);
+            const percent = Math.floor((paintedCells / totalCells) * 100);
+            paintedPercentEl.textContent = `${percent}%`;
+            movesEl.textContent = moves;
+        }
+        
+        // Обновление таймера
+        function updateTimer() {
+            if (!startTime) return;
+            
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            
+            timerEl.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        }
+        
+        // Проверка завершения игры
+        function checkGameCompletion() {
+            const totalCells = (GRID_SIZE * GRID_SIZE) - 
+                             Array(GRID_SIZE).fill().reduce((acc, _, y) => 
+                                 acc + grid[y].filter(cell => cell === 1).length, 0);
+            const percent = Math.floor((paintedCells / totalCells) * 100);
+            
+            if (percent >= 98) {
+                isGameOver = true;
+                clearInterval(timerInterval);
+                
+                // Записываем финальную статистику
+                finalPercentEl.textContent = "100%";
+                finalMovesEl.textContent = moves;
+                finalTimeEl.textContent = timerEl.textContent;
+                
+                // Показываем экран победы
+                gameOverEl.style.display = 'flex';
+            }
+        }
+        
+        // Обработчики событий
+        upBtn.addEventListener('click', () => movePlayer(0, -1));
+        downBtn.addEventListener('click', () => movePlayer(0, 1));
+        leftBtn.addEventListener('click', () => movePlayer(-1, 0));
+        rightBtn.addEventListener('click', () => movePlayer(1, 0));
+        
+        restartButton.addEventListener('click', initGame);
+        
+        // Обработка клавиатуры
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') movePlayer(0, -1);
+            else if (e.key === 'ArrowDown') movePlayer(0, 1);
+            else if (e.key === 'ArrowLeft') movePlayer(-1, 0);
+            else if (e.key === 'ArrowRight') movePlayer(1, 0);
+        });
+        
+        // Запуск игры при загрузке
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
