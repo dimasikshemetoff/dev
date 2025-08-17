@@ -6,23 +6,24 @@ let currentLanguage = 'ru';
 YaGames.init().then(_ysdk => {
     ysdk = _ysdk;
     window.ysdk = ysdk;
-    console.log('Yandex SDK initialized');
+    ysdk.features.LoadingAPI?.ready()
+
+    document.getElementById('start-button').style.opacity = 1;
+    document.getElementById('start-button').removeAttribute('disabled');
 
     // Автоматическое определение языка
     if (ysdk.environment && ysdk.environment.i18n) {
         currentLanguage = ysdk.environment.i18n.lang;
-        console.log('Detected language:', currentLanguage);
     }
 
-    if (ysdk && ysdk.features && ysdk.features.LoadingAPI) {
-        ysdk.features.LoadingAPI.ready();
-    }
+    
     
     // Инициализация игрока
     return ysdk.getPlayer();
+
+    
 }).then(_player => {
     player = _player;
-    console.log('Player initialized');
     
     if (!player.isAuthorized()) {
         console.log('Player is not authorized - leaderboard features will be limited');
@@ -37,11 +38,30 @@ YaGames.init().then(_ysdk => {
         bestScoreDisplay.textContent = data.bestScore;
         localStorage.setItem('BestScore', data.bestScore);
     }
+
+    
 }).catch(err => {
     console.error('Yandex SDK initialization error:', err);
 });
 
-// Объявление звуков глобально
+document.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+});
+
+document.addEventListener('touchstart', (e) => {
+    // Ничего не делаем, просто предотвращаем стандартное поведение
+}, { passive: false });
+
+document.addEventListener('touchend', (e) => {
+    // Предотвращаем появление контекстного меню после долгого нажатия
+    const now = Date.now();
+    if (e.timeStamp - e.target._touchStartTime > 500) {
+        e.preventDefault();
+    }
+});
+
+document.oncontextmenu = function (){return false};
+
 let loseSound, mergeSound, newRecordSound, pauseResumeSound;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -149,14 +169,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pauseResumeSound) pauseResumeSound.volume = 0;
         }
     }
+    
 
     startButton.addEventListener('click', () => {
-        startScreen.style.display = 'none';
-        gameContainer.style.display = 'block';
-        initGame();
         if (ysdk && ysdk.features && ysdk.features.GameplayAPI) {
-            ysdk.features.GameplayAPI.start();
-        }
+                ysdk.features.GameplayAPI.start();
+            }
+            startScreen.style.display = 'none';
+            gameContainer.style.display = 'block';
+            initGame();
+            
+        
     });
     
     pauseButton.addEventListener('click', togglePause);
@@ -1229,3 +1252,5 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
     }, { passive: false });
 });
+
+
