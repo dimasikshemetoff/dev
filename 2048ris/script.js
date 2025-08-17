@@ -2,6 +2,11 @@
 let ysdk;
 let player;
 let currentLanguage = 'ru'; 
+let isSoundEnabled = true; // Перемещено объявление переменной сюда
+
+// Web Audio API переменные
+let audioContext;
+let loseBuffer, mergeBuffer, newRecordBuffer, pauseResumeBuffer;
 
 YaGames.init().then(_ysdk => {
     ysdk = _ysdk;
@@ -15,19 +20,15 @@ YaGames.init().then(_ysdk => {
     if (ysdk.environment && ysdk.environment.i18n) {
         currentLanguage = ysdk.environment.i18n.lang;
     }
-
-    
     
     // Инициализация игрока
     return ysdk.getPlayer();
-
     
 }).then(_player => {
     player = _player;
     
     if (!player.isAuthorized()) {
         console.log('Player is not authorized - leaderboard features will be limited');
-        // Можно предложить игроку авторизоваться
     }
     
     // Загружаем лучший счет из данных игрока
@@ -38,10 +39,73 @@ YaGames.init().then(_ysdk => {
         bestScoreDisplay.textContent = data.bestScore;
         localStorage.setItem('BestScore', data.bestScore);
     }
-
-    
 }).catch(err => {
     console.error('Yandex SDK initialization error:', err);
+});
+
+// Инициализация аудио
+function initAudio() {
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Загрузка аудио-файлов
+        Promise.all([
+            loadSound('lose.mp3'),
+            loadSound('merge.mp3'),
+            loadSound('newrecord.mp3'),
+            loadSound('pauseresume.mp3')
+        ]).then(([lose, merge, newRecord, pauseResume]) => {
+            loseBuffer = lose;
+            mergeBuffer = merge;
+            newRecordBuffer = newRecord;
+            pauseResumeBuffer = pauseResume;
+        }).catch(err => {
+            console.error('Error loading sounds:', err);
+        });
+    } catch (e) {
+        console.error('AudioContext error:', e);
+    }
+}
+
+// Функция загрузки звука
+function loadSound(url) {
+    return fetch(url)
+        .then(response => response.arrayBuffer())
+        .then(buffer => audioContext.decodeAudioData(buffer));
+}
+
+// Функция воспроизведения
+function playSound(buffer, volume = 1) {
+    if (!buffer || !isSoundEnabled || !audioContext) return;
+    
+    try {
+        const source = audioContext.createBufferSource();
+        const gainNode = audioContext.createGain();
+        
+        source.buffer = buffer;
+        gainNode.gain.value = volume;
+        
+        source.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        source.start(0);
+    } catch (e) {
+        console.error('Error playing sound:', e);
+    }
+}
+
+// Обработчик изменения видимости страницы
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        // Приостанавливаем аудиоконтекст при скрытии страницы
+        if (audioContext && audioContext.state === 'running') {
+            audioContext.suspend().catch(e => console.error('Audio suspend error:', e));
+        }
+    } else {
+        // Возобновляем аудиоконтекст при возвращении
+        if (audioContext && audioContext.state === 'suspended') {
+            audioContext.resume().catch(e => console.error('Audio resume error:', e));
+        }
+    }
 });
 
 document.addEventListener('contextmenu', (e) => {
@@ -61,8 +125,6 @@ document.addEventListener('touchend', (e) => {
 });
 
 document.oncontextmenu = function (){return false};
-
-let loseSound, mergeSound, newRecordSound, pauseResumeSound;
 
 document.addEventListener('DOMContentLoaded', () => {
     const gridSize = 4;
@@ -100,7 +162,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let dropTimer = 3;
     let dropTimerInterval;
     let lastDropTime = 0;
-    let isSoundEnabled = true;
     let isPaused = false;
     let fallingTilesCount = 0;
     let timeUntilNextDrop = 0;
@@ -113,42 +174,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let pausedTimeRemaining = 0;
     let totalDropTime = 5000;
     
-    // Инициализация звуков
-    loseSound = document.getElementById('lose-sound');
-    mergeSound = document.getElementById('merge-sound');
-    newRecordSound = document.getElementById('newrecord-sound');
-    pauseResumeSound = document.getElementById('pauseresume-sound');
-    
-    // Установка начальной громкости
-    if (loseSound) loseSound.volume = 0.2;
-    if (mergeSound) mergeSound.volume = 0.1;
-    if (newRecordSound) newRecordSound.volume = 0.5;
-    if (pauseResumeSound) pauseResumeSound.volume = 0.1;
-
-    document.addEventListener("visibilitychange", () => {
-        if (document.hidden) {
-            if (loseSound) loseSound.volume = 0;
-            if (mergeSound) mergeSound.volume = 0;
-            if (newRecordSound) newRecordSound.volume = 0;
-            if (pauseResumeSound) pauseResumeSound.volume = 0;
-        } else if (!document.hidden) {
-            if (loseSound) loseSound.volume = 0.2;
-            if (mergeSound) mergeSound.volume = 0.1;
-            if (newRecordSound) newRecordSound.volume = 0.5;
-            if (pauseResumeSound) pauseResumeSound.volume = 0.1;
-        }
-        });
-
-
-    function resumeAllSounds() {
-        if (!isSoundEnabled || document.hidden) return;
-        
-        if (loseSound) loseSound.volume = 0.2;
-        if (mergeSound) mergeSound.volume = 0.1;
-        if (newRecordSound) newRecordSound.volume = 0.5;
-        if (pauseResumeSound) pauseResumeSound.volume = 0.1;
-    }
-    
     soundButton.addEventListener('click', toggleSound);
     bestScoreDisplay.textContent = bestScore;
     
@@ -158,28 +183,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isSoundEnabled) {
             soundButton.classList.remove('muted');
             soundIcon.textContent = '🔊';
-            resumeAllSounds();
         } else {
             soundButton.classList.add('muted');
             soundIcon.textContent = '🔇';
-            // Обнуляем громкость всех звуков
-            if (loseSound) loseSound.volume = 0;
-            if (mergeSound) mergeSound.volume = 0;
-            if (newRecordSound) newRecordSound.volume = 0;
-            if (pauseResumeSound) pauseResumeSound.volume = 0;
         }
     }
-    
 
     startButton.addEventListener('click', () => {
-        if (ysdk && ysdk.features && ysdk.features.GameplayAPI) {
-                ysdk.features.GameplayAPI.start();
-            }
-            startScreen.style.display = 'none';
-            gameContainer.style.display = 'block';
-            initGame();
-            
+        initAudio(); // Инициализируем аудио
         
+        if (ysdk && ysdk.features && ysdk.features.GameplayAPI) {
+            ysdk.features.GameplayAPI.start();
+        }
+        
+        startScreen.style.display = 'none';
+        gameContainer.style.display = 'block';
+        initGame();
     });
     
     pauseButton.addEventListener('click', togglePause);
@@ -282,10 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ysdk.features.GameplayAPI.stop();
             }
             
-            if (isSoundEnabled && pauseResumeSound) {
-                pauseResumeSound.currentTime = 0;
-                pauseResumeSound.play();
-            }
+            playSound(pauseResumeBuffer, 0.1);
         } else {
             timeUntilNextDrop = pausedTimeRemaining;
             lastDropTime = Date.now() - (totalDropTime - pausedTimeRemaining);
@@ -299,10 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ysdk.features.GameplayAPI.start();
             }
             
-            if (isSoundEnabled && pauseResumeSound) {
-                pauseResumeSound.currentTime = 0;
-                pauseResumeSound.play();
-            }
+            playSound(pauseResumeBuffer, 0.1);
         }
     }
     
@@ -360,15 +373,12 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let col = 0; col < gridSize; col++) {
             let emptyRow = gridSize - 1;
             
-            // Проходим снизу вверх
             for (let row = gridSize - 1; row >= 0; row--) {
                 if (board[row][col] !== null) {
                     if (row !== emptyRow) {
-                        // Перемещаем плитку вниз
                         board[emptyRow][col] = board[row][col];
                         board[row][col] = null;
                         
-                        // Обновляем DOM
                         const tile = document.getElementById(`tile-${row}-${col}`);
                         if (tile) {
                             tile.remove();
@@ -538,7 +548,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Проверяем доступность лидербордов для данного пользователя
         ysdk.isAvailableMethod('leaderboards.getPlayerEntry').then(available => {
             if (available) {
                 document.getElementById('leaderboard-box').style.display = 'flex';
@@ -568,7 +577,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw err;
             })
         ]).then(([topEntries, playerEntry]) => {
-            // Обновляем UI лидерборда
             displayLeaderboardData(topEntries);
             displayPlayerRank(playerEntry);
         }).catch(err => {
@@ -701,33 +709,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updatePlayerScore() {
-        // Проверяем доступность SDK и лидербордов
         if (!ysdk || !ysdk.leaderboards || score <= 0) {
             console.log('Leaderboards not available or invalid score');
             return;
         }
 
-        // Получаем текущий рекорд игрока
         ysdk.leaderboards.getPlayerEntry(leaderboardName)
             .then(currentEntry => {
-                // Если у игрока уже есть запись в лидерборде и текущий счет не больше
                 if (currentEntry && score <= currentEntry.score) {
                     console.log('Current score is not better than existing record');
                     return;
                 }
 
-                // Если игрок авторизован, сохраняем рекорд в его данные
                 if (player && player.isAuthorized()) {
                     player.getData(['BestScore'])
                         .then(data => {
                             const playerBest = data && data.bestScore ? parseInt(data.bestScore) : 0;
-                            // Обновляем только если текущий счет больше
                             if (score > playerBest) {
                                 return player.setData({ bestScore: score });
                             }
                         })
                         .then(() => {
-                            // Обновляем лидерборд только если счет действительно новый рекорд
                             return ysdk.leaderboards.setScore(leaderboardName, score);
                         })
                         .then(() => {
@@ -740,7 +742,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             handleLeaderboardError(err);
                         });
                 } else {
-                    // Для неавторизованных игроков используем localStorage
                     const localBest = parseInt(localStorage.getItem('BestScore')) || 0;
                     if (score > localBest) {
                         localStorage.setItem('BestScore', score);
@@ -750,7 +751,6 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(err => {
                 if (err.code === 'LEADERBOARD_PLAYER_NOT_PRESENT') {
-                    // Если записи игрока нет, создаем новую
                     ysdk.leaderboards.setScore(leaderboardName, score)
                         .then(() => {
                             console.log('New player record created in leaderboard:', score);
@@ -769,7 +769,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleLeaderboardError(err) {
-        // Обработка специфических ошибок
         if (err.code === 'LEADERBOARD_TOO_MANY_REQUESTS') {
             console.log('Too many requests, retrying in 1 second');
             setTimeout(updatePlayerScore, 1000);
@@ -897,10 +896,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         score += newValue;
         if(score !== lastscore){
-            if (isSoundEnabled && mergeSound) {
-                mergeSound.currentTime = 0;
-                mergeSound.play();
-            }
+            playSound(mergeBuffer, 0.1);
         }
         lastscore = score;
         scoreDisplay.textContent = score;
@@ -914,9 +910,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.setData({ bestScore });
             }
             
-            if (!hasNewRecordSoundPlayed && isSoundEnabled && newRecordSound) {
-                newRecordSound.currentTime = 0;
-                newRecordSound.play();
+            if (!hasNewRecordSoundPlayed) {
+                playSound(newRecordBuffer, 0.5);
                 hasNewRecordSoundPlayed = true;
             }
         }
@@ -956,10 +951,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (board[row][col] !== null) {
                         if (previousValue === board[row][col]) {
                             const mergedValue = previousValue * 2;
-                            if (isSoundEnabled && mergeSound) {
-                                mergeSound.currentTime = 0;
-                                mergeSound.play();
-                            }
+                            playSound(mergeBuffer, 0.1);
                             board[mergePosition - 1][col] = mergedValue;
                             board[row][col] = null;
                             score += mergedValue;
@@ -986,10 +978,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (board[row][col] !== null) {
                         if (previousValue === board[row][col]) {
                             const mergedValue = previousValue * 2;
-                            if (isSoundEnabled && mergeSound) {
-                                mergeSound.currentTime = 0;
-                                mergeSound.play();
-                            }
+                            playSound(mergeBuffer, 0.1);
                             board[mergePosition + 1][col] = mergedValue;
                             board[row][col] = null;
                             score += mergedValue;
@@ -1016,10 +1005,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (board[row][col] !== null) {
                         if (previousValue === board[row][col]) {
                             const mergedValue = previousValue * 2;
-                            if (isSoundEnabled && mergeSound) {
-                                mergeSound.currentTime = 0;
-                                mergeSound.play();
-                            }
+                            playSound(mergeBuffer, 0.1);
                             board[row][mergePosition - 1] = mergedValue;
                             board[row][col] = null;
                             score += mergedValue;
@@ -1046,10 +1032,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (board[row][col] !== null) {
                         if (previousValue === board[row][col]) {
                             const mergedValue = previousValue * 2;
-                            if (isSoundEnabled && mergeSound) {
-                                mergeSound.currentTime = 0;
-                                mergeSound.play();
-                            }
+                            playSound(mergeBuffer, 0.1);
                             board[row][mergePosition + 1] = mergedValue;
                             board[row][col] = null;
                             score += mergedValue;
@@ -1080,9 +1063,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     player.setData({ bestScore });
                 }
                 
-                if (!hasNewRecordSoundPlayed && isSoundEnabled && newRecordSound) {
-                    newRecordSound.currentTime = 0;
-                    newRecordSound.play();
+                if (!hasNewRecordSoundPlayed) {
+                    playSound(newRecordBuffer, 0.5);
                     hasNewRecordSoundPlayed = true;
                 }
             }
@@ -1159,10 +1141,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ysdk.features.GameplayAPI.stop();
         }
         
-        if (isSoundEnabled) {
-            loseSound.currentTime = 0;
-            loseSound.play();
-        }
+        playSound(loseBuffer, 0.2);
     }
 
     document.addEventListener('keydown', (e) => {
@@ -1252,5 +1231,3 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
     }, { passive: false });
 });
-
-

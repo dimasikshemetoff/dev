@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Knife Ninja</title>
+    <script type="text/javascript" src='https://cdnjs.cloudflare.com/ajax/libs/box2d.js/2.1.0b3/Box2d.min.js'></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/cocos2d-html5/0.8.2/cocos2d-min.js"></script>
+    <style>
+        * { margin:0; padding:0; }
+        body { background: #222; overflow: hidden; }
+        canvas { display: block; margin: 20px auto; background: #8ED6FF; }
+    </style>
+</head>
+<body>
+    <canvas id="viewport" width="1200" height="600"></canvas>
+
+    <script>
+    // Game Constants
+    const FRUIT_TYPES = ['apple', 'orange', 'watermelon', 'pineapple', 'banana'];
+    const LEVELS = [
+        {
+            fruits: [
+                {type: 'apple', x: 900, y: 150},
+                {type: 'orange', x: 950, y: 200},
+                {type: 'watermelon', x: 1000, y: 150}
+            ],
+            knives: 5
+        },
+        {
+            fruits: [
+                {type: 'pineapple', x: 850, y: 100},
+                {type: 'banana', x: 900, y: 170},
+                {type: 'apple', x: 950, y: 100},
+                {type: 'orange', x: 1000, y: 170},
+                {type: 'watermelon', x: 1050, y: 100}
+            ],
+            knives: 4
+        }
+    ];
+
+    // Physics Setup
+    var MathH = {
+        clamp: function (num, min, max) {
+            return Math.min(max, Math.max(num, min));
+        }
+    };
+
+    var BodyUserData = function (objectRoll, fullHealth) {
+        var self = this,
+            currentHealth = fullHealth;
+
+        this.isDead = false;
+        this.isContacted = false;
+        this.getObjectRoll = function () {
+            return objectRoll;
+        };
+        this.getFullHealth = function () {
+            return fullHealth;
+        };
+        this.getHealth = function () {
+            return currentHealth;
+        };
+        this.damage = function (impulse) {
+            this.isDead = ((currentHealth -= impulse) <= 0);
+        };
+    };
+
+    var GameObjectRoll = {
+        Fruit: "FRUIT",
+        Obstacle: "OBSTACLE",
+        Knife: "KNIFE"
+    };
+    Object.freeze(GameObjectRoll);
+
+    // Box2D aliases
+    var b2Body = Box2D.Dynamics.b2Body,
+        b2BodyDef = Box2D.Dynamics.b2BodyDef,
+        b2FixtureDef = Box2D.Dynamics.b2FixtureDef,
+        b2CircleShape = Box2D.Collision.Shapes.b2CircleShape,
+        b2PolygonShape = Box2D.Collision.Shapes.b2PolygonShape,
+        b2Vec2 = Box2D.Common.Math.b2Vec2,
+        b2World = Box2D.Dynamics.b2World,
+        b2DebugDraw = Box2D.Dynamics.b2DebugDraw,
+        b2ContactListener = Box2D.Dynamics.b2ContactListener;
+
+    var b2 = (function () {
+        var self = this,
+            cutFruits = 0,
+            userScore = 0,
+            world,
+            bodies = [],
+            PTMRatio = 30.0,
+            toWorld = function (n) {
+                return n / PTMRatio;
+            },
+            toScreen = function (n) {
+                return n * PTMRatio;
+            },
+            b2AngleToCCRotation = function (n) {
+                return (-1 * cc.RADIANS_TO_DEGREES(n));
+            },
+            CCRotationToB2Angle = function (n) {
+                return cc.DEGREES_TO_RADIANS(-1 * n);
+            };
+
+        var contactListener = new b2ContactListener();
+        contactListener.BeginContact = function (contact) {
+            var bodyA = contact.GetFixtureA().GetBody(),
+                bodyB = contact.GetFixtureB().GetBody(),
+                bAData = bodyA.GetUserData(),
+                bBData = bodyB.GetUserData();
+
+            if (bAData && bAData.getObjectRoll() === GameObjectRoll.Knife && 
+                bBData && bBData.getObjectRoll() === GameObjectRoll.Fruit) {
+                cutFruits++;
+                userScore += 500;
+            }
+        };
+
+        return {
+            initWorld: function () {
+                cutFruits = userScore = 0;
+                world = new b2World(new b2Vec2(0, -10), true);
+                world.SetContactListener(contactListener);
+                bodies = [];
+            },
+            getUserScore: function () { return userScore; },
+            getCutFruits: function () { return cutFruits; },
+            enablePhysicsFor: function (desc) {
+                var bodyDef = new b2BodyDef(),
+                    scale = {
+                        x: desc.sprite.getScaleX(),
+                        y: desc.sprite.getScaleY()
+                    },
+                    anch = desc.sprite.getAnchorPointInPoints(),
+                    anchPoint = cc.p(anch.x * scale.x, anch.y * scale.y),
+                    position = desc.sprite.getPosition(),
+                    contentSize = desc.sprite.getContentSize(),
+                    size = {
+                        width: contentSize.width * scale.x,
+                        height: contentSize.height * scale.y
+                    },
+                    center = cc.p(position.x - anchPoint.x + size.width / 2, 
+                                 position.y - anchPoint.y + size.height / 2);
+
+                bodyDef.type = desc.type === "static" ? b2Body.b2_staticBody : 
+                              desc.type === "dynamic" ? b2Body.b2_dynamicBody : b2Body.b2_kinematicBody;
+
+                bodyDef.position.Set(toWorld(center.x), toWorld(center.y));
+                bodyDef.angle = CCRotationToB2Angle(desc.sprite.getRotation());
+
+                var fixDef = new b2FixtureDef();
+                switch (desc.shape) {
+                    case "circle":
+                        fixDef.shape = new b2CircleShape(toWorld(desc.radius || (size.height / 2)));
+                        break;
+                    case "box":
+                        fixDef.shape = new b2PolygonShape();
+                        fixDef.shape.SetAsBox(toWorld(size.width) / 2, toWorld(size.height) / 2);
+                        break;
+                }
+
+                fixDef.density = desc.density || 1;
+                fixDef.friction = desc.friction || 0.5;
+                fixDef.restitution = desc.restitution || 0.1;
+
+                var body = world.CreateBody(bodyDef);
+                body.CreateFixture(fixDef);
+
+                desc.userData && body.SetUserData(desc.userData);
+
+                body.sprite = desc.sprite;
+                desc.sprite.body = body;
+
+                bodies.push(body);
+            },
+            simulate: function () {
+                world.Step(1 / 60, 10, 10);
+
+                for (var i = 0; i < bodies.length; i++) {
+                    var body = bodies[i],
+                        bodyData = body.GetUserData(),
+                        bPos = body.GetPosition(),
+                        bAngle = body.GetAngle();
+
+                    if (bodyData && bodyData.isDead) {
+                        world.DestroyBody(body);
+                        body.sprite.runAction(cc.FadeOut.create(0.3));
+                        body.SetUserData(null);
+                        continue;
+                    }
+
+                    var scale = {x: body.sprite.getScaleX(), y: body.sprite.getScaleY()},
+                        anch = body.sprite.getAnchorPointInPoints(),
+                        anchPoint = cc.p(anch.x * scale.x, anch.y * scale.y),
+                        position = body.sprite.getPosition(),
+                        contentSize = body.sprite.getContentSize(),
+                        size = {
+                            width: contentSize.width * scale.x,
+                            height: contentSize.height * scale.y
+                        };
+
+                    body.sprite.setPosition(cc.p(
+                        toScreen(bPos.x) + anchPoint.x - size.width / 2, 
+                        toScreen(bPos.y) + anchPoint.y - size.height / 2
+                    ));
+                    body.sprite.setRotation(b2AngleToCCRotation(bAngle));
+                }
+
+                world.ClearForces();
+            }
+        };
+    }());
+
+    // Game Layer
+    var GameLayer = cc.Layer.extend({
+        knifeSprite: null,
+        isDraggingSling: false,
+        knifeStartPos: cc.p(260, 440),
+        slingRadius: { min: 20, max: 80 },
+        slingAngle: { min: cc.DEGREES_TO_RADIANS(250), max: cc.DEGREES_TO_RADIANS(295) },
+        currentLevel: 0,
+        knivesLeft: 0,
+        levelLabel: null,
+        scoreLabel: null,
+        knivesLabel: null,
+
+        ctor: function() {
+            this._super();
+            this.init();
+        },
+
+        init: function () {
+            this._super();
+            this.removeAllChildrenWithCleanup(true);
+            this.setTouchEnabled(true);
+
+            var levelData = LEVELS[this.currentLevel];
+            this.knivesLeft = levelData.knives;
+
+            b2.initWorld();
+
+            // Background
+            this.addBackground();
+
+            // UI
+            this.addUI();
+
+            // Sling
+            this.addSling();
+
+            // Fruits
+            this.addFruits(levelData.fruits);
+
+            // Obstacles
+            this.addObstacles();
+
+            // Initial knife
+            this.addKnife();
+
+            this.scheduleUpdate();
+        },
+
+        addBackground: function() {
+            var bg = new cc.Sprite(res.bg_png);
+            bg.setAnchorPoint(cc.p(0, 0));
+            bg.setScaleY(0.8);
+            this.addChild(bg, -1);
+        },
+
+        addUI: function() {
+            var winSize = cc.Director.getInstance().getWinSize();
+
+            // Level
+            this.levelLabel = new cc.LabelTTF("Level: " + (this.currentLevel + 1), "Arial", 24);
+            this.levelLabel.setPosition(cc.p(100, winSize.height - 30));
+            this.addChild(this.levelLabel, 10);
+
+            // Score
+            this.scoreLabel = new cc.LabelTTF("Score: 0", "Arial", 24);
+            this.scoreLabel.setPosition(cc.p(winSize.width / 2, winSize.height - 30));
+            this.addChild(this.scoreLabel, 10);
+
+            // Knives
+            this.knivesLabel = new cc.LabelTTF("Knives: " + this.knivesLeft, "Arial", 24);
+            this.knivesLabel.setPosition(cc.p(winSize.width - 100, winSize.height - 30));
+            this.addChild(this.knivesLabel, 10);
+        },
+
+        addSling: function() {
+            var sling1 = new cc.Sprite(res.sling1_png);
+            sling1.setPosition(cc.p(284, 319));
+            sling1.setScale(0.7);
+            sling1.setAnchorPoint(cc.p(1, 0));
+            this.addChild(sling1);
+
+            var sling2 = new cc.Sprite(res.sling2_png);
+            sling2.setPosition(cc.p(268, 376));
+            sling2.setScale(0.7);
+            sling2.setAnchorPoint(cc.p(1, 0));
+            this.addChild(sling2, 3);
+
+            this.slingRubber1 = new cc.Sprite(res.sling3_png);
+            this.slingRubber1.setPosition(cc.p(278, 436));
+            this.slingRubber1.setScaleY(0.7);
+            this.slingRubber1.setScaleX(0);
+            this.slingRubber1.setAnchorPoint(cc.p(1, 0.5));
+            this.addChild(this.slingRubber1);
+
+            this.slingRubber2 = new cc.Sprite(res.sling3_png);
+            this.slingRubber2.setPosition(cc.p(250, 440));
+            this.slingRubber2.setScaleY(0.7);
+            this.slingRubber2.setScaleX(0);
+            this.slingRubber2.setAnchorPoint(cc.p(1, 0.5));
+            this.addChild(this.slingRubber2, 2);
+        },
+
+        addFruits: function(fruits) {
+            for (var i = 0; i < fruits.length; i++) {
+                var fruit = fruits[i];
+                var sprite = new cc.Sprite(res[fruit.type + '_png']);
+                sprite.setPosition(cc.p(fruit.x, fruit.y));
+                sprite.setScale(0.8);
+                
+                b2.enablePhysicsFor({
+                    type: "dynamic",
+                    shape: "circle",
+                    sprite: sprite,
+                    density: 1.5,
+                    restitution: 0.4,
+                    userData: new BodyUserData(GameObjectRoll.Fruit, 100)
+                });
+
+                this.addChild(sprite);
+            }
+        },
+
+        addObstacles: function() {
+            var box1 = new cc.Sprite(res.wood1_png);
+            box1.setPosition(cc.p(840, 71));
+            b2.enablePhysicsFor({
+                type: "dynamic",
+                shape: "box",
+                sprite: box1,
+                userData: new BodyUserData(GameObjectRoll.Obstacle, 2000)
+            });
+            this.addChild(box1);
+
+            var box2 = new cc.Sprite(res.wood1_png);
+            box2.setPosition(cc.p(1017, 71));
+            b2.enablePhysicsFor({
+                type: "dynamic",
+                shape: "box",
+                sprite: box2,
+                userData: new BodyUserData(GameObjectRoll.Obstacle, 2000)
+            });
+            this.addChild(box2);
+        },
+
+        addKnife: function() {
+            if (this.knifeSprite) {
+                this.removeChild(this.knifeSprite);
+            }
+
+            this.knifeSprite = new cc.Sprite(res.knife_png);
+            this.knifeSprite.setPosition(this.knifeStartPos);
+            this.addChild(this.knifeSprite, 1);
+
+            // Initial animation
+            var action = cc.Spawn.create(
+                cc.RotateBy.create(1.5, 360),
+                cc.JumpTo.create(1.5, this.knifeStartPos, 100, 1)
+            );
+            this.knifeSprite.runAction(action);
+        },
+
+        update: function (dt) {
+            b2.simulate();
+            
+            // Update UI
+            this.scoreLabel.setString("Score: " + b2.getUserScore());
+            this.knivesLabel.setString("Knives: " + this.knivesLeft);
+            
+            // Check level completion
+            if (b2.getCutFruits() >= LEVELS[this.currentLevel].fruits.length) {
+                this.scheduleOnce(function() {
+                    this.nextLevel();
+                }, 1.0);
+            }
+            
+            // Check game over
+            if (this.knivesLeft <= 0 && !this.knifeSprite.body) {
+                var allStopped = true;
+                for (var i = 0; i < this.getChildren().length; i++) {
+                    var child = this.getChildren()[i];
+                    if (child.body && !child.body.IsSleeping()) {
+                        allStopped = false;
+                        break;
+                    }
+                }
+                
+                if (allStopped && b2.getCutFruits() < LEVELS[this.currentLevel].fruits.length) {
+                    this.scheduleOnce(function() {
+                        this.gameOver();
+                    }, 1.0);
+                }
+            }
+        },
+
+        nextLevel: function() {
+            this.currentLevel++;
+            if (this.currentLevel >= LEVELS.length) {
+                this.gameOver(true);
+            } else {
+                this.init();
+            }
+        },
+
+        gameOver: function(isWin) {
+            var winSize = cc.Director.getInstance().getWinSize();
+            var message = isWin ? "You Win!" : "Game Over";
+            
+            var gameOverLabel = new cc.LabelTTF(message, "Arial", 48);
+            gameOverLabel.setPosition(cc.p(winSize.width / 2, winSize.height / 2));
+            gameOverLabel.setColor(cc.c3(255, 0, 0));
+            this.addChild(gameOverLabel, 100);
+            
+            var restartLabel = new cc.LabelTTF("Tap to restart", "Arial", 24);
+            restartLabel.setPosition(cc.p(winSize.width / 2, winSize.height / 2 - 50));
+            this.addChild(restartLabel, 100);
+            
+            this.setTouchEnabled(true);
+        },
+
+        onTouchesBegan: function (touch, evt) {
+            if (this.getChildByTag(999)) { // Game over screen
+                this.unscheduleAllCallbacks();
+                this.currentLevel = 0;
+                this.init();
+                return;
+            }
+            
+            var currPoint = touch[0].getLocation(),
+                vector = cc.pSub(this.knifeStartPos, currPoint);
+
+            this.isDraggingSling = (cc.pLength(vector) < this.slingRadius.max && 
+                                  this.knivesLeft > 0 && 
+                                  !this.knifeSprite.body);
+        },
+
+        onTouchesMoved: function (touch, evt) {
+            if (!this.isDraggingSling) return;
+
+            var currPoint = touch[0].getLocation(),
+                vector = cc.pSub(currPoint, this.knifeStartPos),
+                radius = cc.pLength(vector),
+                angle = cc.pToAngle(vector);
+
+            angle = angle < 0 ? (Math.PI * 2) + angle : angle;
+            radius = MathH.clamp(radius, this.slingRadius.min, this.slingRadius.max);
+            if (angle <= this.slingAngle.max && angle >= this.slingAngle.min) {
+                radius = this.slingRadius.min;
+            }
+
+            this.knifeSprite.setPosition(cc.pAdd(this.knifeStartPos, 
+                cc.p(radius * Math.cos(angle), radius * Math.sin(angle))));
+
+            this.updateRubber(this.slingRubber1, this.knifeSprite.getPosition(), 0);
+            this.updateRubber(this.slingRubber2, this.knifeSprite.getPosition(), 13);
+        },
+
+        updateRubber: function(rubber, to, lengthAddon) {
+            var from = rubber.getPosition(),
+                rubberVec = cc.pSub(to, from),
+                rubberAng = cc.pToAngle(rubberVec),
+                rubberDeg = cc.RADIANS_TO_DEGREES(rubberAng),
+                length = cc.pLength(rubberVec) + lengthAddon;
+
+            rubber.setRotation(-rubberDeg);
+            rubber.setScaleX(-(length / rubber.getContentSize().width));
+        },
+
+        onTouchesEnded: function (touch, evt) {
+            if (!this.isDraggingSling || this.knifeSprite.body || this.knivesLeft <= 0) return;
+
+            this.slingRubber1.setVisible(false);
+            this.slingRubber2.setVisible(false);
+
+            // Enable physics for knife
+            b2.enablePhysicsFor({
+                type: "dynamic",
+                shape: "box",
+                sprite: this.knifeSprite,
+                density: 20,
+                restitution: 0.1,
+                userData: new BodyUserData(GameObjectRoll.Knife, 500)
+            });
+
+            // Apply impulse
+            var vector = cc.pSub(this.knifeStartPos, this.knifeSprite.getPosition()),
+                impulse = cc.pMult(vector, 20),
+                bPos = this.knifeSprite.body.GetWorldCenter();
+
+            this.knifeSprite.body.ApplyImpulse(impulse, bPos);
+            this.knifeSprite.body.ApplyTorque(50);
+
+            this.isDraggingSling = false;
+            this.knivesLeft--;
+
+            // Add new knife if available
+            if (this.knivesLeft > 0) {
+                this.scheduleOnce(function() {
+                    this.addKnife();
+                    this.slingRubber1.setVisible(true);
+                    this.slingRubber2.setVisible(true);
+                }, 1.0);
+            }
+        }
+    });
+
+    // Resources
+    var res = {
+        bg_png: "https://i.imgur.com/5XQ8Y7y.png",
+        sling1_png: "https://i.imgur.com/8WzFQ9m.png",
+        sling2_png: "https://i.imgur.com/5aXqJ0f.png",
+        sling3_png: "https://i.imgur.com/9yYVQ0F.png",
+        wood1_png: "https://i.imgur.com/7QZ4Z7F.png",
+        knife_png: "https://i.imgur.com/mXKq0Wb.png",
+        apple_png: "https://i.imgur.com/5fWww4y.png",
+        orange_png: "https://i.imgur.com/7v0K5bE.png",
+        watermelon_png: "https://i.imgur.com/9XZ4Z7F.png",
+        pineapple_png: "https://i.imgur.com/9XZ4Z7F.png",
+        banana_png: "https://i.imgur.com/9XZ4Z7F.png"
+    };
+
+    // Game Scene
+    var GameScene = cc.Scene.extend({
+        onEnter: function () {
+            this._super();
+            var layer = new GameLayer();
+            this.addChild(layer);
+        }
+    });
+
+    // Application Entry Point
+    cc.game.onStart = function() {
+        cc.LoaderScene.preload(Object.values(res), function() {
+            cc.Director.getInstance().runWithScene(new GameScene());
+        }, this);
+    };
+    cc.game.run();
+    </script>
+</body>
+</html>
